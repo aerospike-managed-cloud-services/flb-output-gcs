@@ -1,7 +1,7 @@
 #!/usr/bin/env make
 
 SHELL 	:= /usr/bin/bash
-PROG 	:= your-cool-program  ## (replace)
+PROG 	:= flb-output-gcs
 VERSION := $(shell tools/describe-version)
 TARBALL := $(PROG)-$(VERSION).tar.gz
 
@@ -10,8 +10,8 @@ TARBALL := $(PROG)-$(VERSION).tar.gz
 
 all: $(PROG)
 
-$(PROG): your.source.files  ## (replace)
-	build-your-prog  ## (replace)
+$(PROG): *.go
+	go build
 
 $(TARBALL): $(PROG)
 	tar cfz $@ $^ && tar tvfz $@
@@ -22,4 +22,4 @@ clean:
 	rm -f $(PROG) $(TARBALL)
 
 test:
-	run-some-tests  ## (replace)
+	go test

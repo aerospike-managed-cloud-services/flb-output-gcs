@@ -1,43 +1,6 @@
-> -----
-> :information_source: How to use this template repository
->
-> Ref: [AMS Project Repo] HOWTO document
->
-> ### Create a new repo from this template
-> 1. Use this template ([More info]):
->     1. Visit [aerospike-managed-cloud-services/template-github-repo]
->     1. Above the file list, click _Use this template_
->     1. Follow the new repo wizard as usual
-> 
-> ### Update and customize the new repo to your needs
-> 1. Per [AMS Project Repo], perform the first steps under 
->    "Reach out to a Director level team member...", particularly wrt Settings > Branches
-> 1. In your new repo, update CODEOWNERS as needed
-> 1. (If it is a public repo) Add a LICENSE file
-> 1. Update this README:
->     - update title, description, install steps and anything marked (replace)
->     - add version info to the changelog
->     - Maintainer section might work for you with no changes!
->     - delete this info section from the top
-> 1. Read `build-test.yaml` and `release.yaml` (in `.github/workflows`)
->     - update as needed
->     - `release.yaml` and the `makefile` assume you will have a build step,
->       and that your release artifact is a simple tarball
-> 1. Read `makefile` and update as needed
->     - Several lines are marked (replace), pay special attention to those
-> 1. Update `.gitignore` as needed
-> 1. Create a `develop` branch from `main`
-> 1. Create and push a `v0.0` tag to the HEAD of `main`
->
-> [AMS Project Repo]: https://aerospike.atlassian.net/wiki/spaces/MS/pages/2567471115/Organization+and+Tooling+AMS+Project+Repo+DRAFT
-> [More info]: https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
-> [aerospike-managed-cloud-services/template-github-repo]: https://github.com/aerospike-managed-cloud-services/template-github-repo
->
-> -----
+# flb-output-gcs
 
-# template-github-repo (replace)
-
-description (replace)
+Fluent-bit output plugin to write to GCS buckets 
 
 ## Installation
 
