@@ -1,0 +1,19 @@
+name: build + test
+on: [push]  # all push to any branch
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Running in response to ${{ github.event_name }}"
+
+      - name: Check out repository code
+        uses: actions/checkout@v2
+
+      # (replace) - set up the implementation language of choice
+      - name: Setup Go
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+      
+      - name: Test
+        run: make test

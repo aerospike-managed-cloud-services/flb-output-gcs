@@ -1,0 +1,37 @@
+name: publish release
+on: [workflow_dispatch]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out 
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # all branches and tags; needed for version string
+
+      - name: Print the describe-version
+        run: |
+          echo "::notice::output of describe-version for this branch: $(tools/describe-version)"
+
+      - name: Check release conditions
+        id: check_release_conditions
+        run: |
+          release_version="$(tools/describe-version)"
+          if [[ "$release_version" =~ ^v[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "::notice::Release version: $release_version"
+            echo "::set-output name=release_version::$release_version"
+          else
+            echo "::error::This is not a release. To create a release, tag a commit with a release version, e.g.: git tag -a -m v1.2.3 v1.2.3; git push --tags"
+            false
+          fi
+
+      - name: Package release
+        run: make tarball
+
+      - name: Create GitHub release with gh  ## (replace the tarball name below)
+        run: |
+          link=$(tools/release \
+            "${{ steps.check_release_conditions.outputs.release_version }}" \
+            "${{ secrets.GITHUB_TOKEN }}" \
+            "your-cool-project-${{ steps.check_release_conditions.outputs.release_version }}.tar.gz")
+          echo "::notice::Release link: $link"

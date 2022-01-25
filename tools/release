@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# create a github release with the gh tool
+
+set -euo pipefail
+IFS=$'\n\t'
+
+ver="$1"
+token="$2"
+artifact="$3"
+
+gh auth login --with-token <<< "$token"
+gh release create -t "Release $ver" -n "## Release $ver" "$ver"  "$artifact"
