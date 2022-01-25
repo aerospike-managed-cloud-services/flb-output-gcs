@@ -70,21 +70,19 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
-### versions [x.y.z] (replace)
+### [0.0]
 
-- with changes listed; you should read [Keep a Changelog]
-
-
-[Unreleased]: ~~url for ...HEAD~~
-
-[x.y.z]: ~~url for v0.0..x.y.z~~
-
-[0.0]: ~~url for the v0.0 tag~~
+- Brand-new repo.
 
 
-[latest release]: ~~url for /releases/latest~~
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.0..HEAD
 
-[Releases page]: ~~url for /releases~~
+[0.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/tree/v0.0
+
+
+[latest release]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/releases/latest
+
+[Releases page]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/releases
 
 [Keep a Changelog]: https://keepachangelog.com/en/1.0.0/
 
