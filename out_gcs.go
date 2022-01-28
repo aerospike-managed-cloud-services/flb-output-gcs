@@ -2,13 +2,14 @@ package main
 
 import (
 	"C"
-	"cloud.google.com/go/storage"
 	"context"
 	"fmt"
-	"github.com/fluent/fluent-bit-go/output"
 	"log"
 	"strings"
 	"unsafe"
+
+	"cloud.google.com/go/storage"
+	"github.com/fluent/fluent-bit-go/output"
 )
 
 const (
@@ -18,6 +19,7 @@ const (
 var (
 	VERSION string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
 	client  *storage.Client
+	bucket  *storage.BucketHandle
 )
 
 //export FLBPluginRegister
@@ -72,7 +74,6 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	// inherit security creds from the environment; e.g. be able to use
 	// 	application_default_credentials when available creds specified as the
 	// 	name of a service account (overrides application_default when specified)
-	// when 5 minutes have expired with no new log buffered
 
 	return output.FLB_OK
 }
@@ -94,16 +95,18 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		for key, val := range rec {
 			printable.WriteString(fmt.Sprintf("%s: %v, ", key, val))
 		}
-		printable.WriteString("}\n")
+		printable.WriteString("}]\n")
 
-		log.Print(printable.String())
-		obj_filename := "TODO_FILENAME"
-		log.Printf("[%s] Flush to gs://%s/%s/%s", FB_OUTPUT_NAME, config["bucket"], config["prefix"], obj_filename)
+		obj_path := fmt.Sprintf("%s/%s-TODO_FILENAME", config["prefix"], C.GoString(tag))
+		log.Printf("[%s] Flush to gs://%s/%s", FB_OUTPUT_NAME, config["bucket"], obj_path)
 
+		if _, err := simpleUpload(printable, config["bucket"], obj_path); err != nil {
+			// output.FLB_ERROR does not retry these bytes
+			log.Fatal(err)
+			return output.FLB_ERROR
+		}
 	}
 
-	// FLB_ERROR does not retry these bytes
-	// FLB_RETRY does retry these bytes
 	return output.FLB_OK
 }
 
@@ -112,10 +115,16 @@ func FLBPluginExit() int {
 	return output.FLB_OK
 }
 
+func simpleUpload(builder strings.Builder, bucket_name, obj_path string) (int, error) {
+	ctx := context.Background()
+	wc := client.Bucket(bucket_name).Object(obj_path).NewWriter(ctx)
+	n, err := wc.Write([]byte(builder.String()))
+	wc.Close()
+	return n, err
+}
+
 // // streamFileUpload uploads an object via a stream.
 // func streamFileUpload(w io.Writer, bucket, object string) error {
-// 	// bucket := "bucket-name"
-// 	// object := "object-name"
 // 	ctx := context.Background()
 // 	client, err := storage.NewClient(ctx)
 // 	if err != nil {
