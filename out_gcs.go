@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 	"unsafe"
 
 	"cloud.google.com/go/storage"
@@ -17,10 +18,40 @@ const (
 )
 
 var (
-	VERSION string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
-	client  *storage.Client
-	bucket  *storage.BucketHandle
+	VERSION      string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
+	client       *storage.Client
+	bucket       *storage.BucketHandle
+	destinations map[string]object_destination
 )
+
+// manages the lifetime of a gcs object
+type object_destination struct {
+	tag         string
+	bucket_name string
+	bucket      *storage.BucketHandle
+	object_path string
+	last        time.Time
+	written     int64
+	builder     strings.Builder
+}
+
+func NewDestination(tag string, bucket_name, prefix string) *object_destination {
+	bucket := client.Bucket(bucket_name)
+	object_path := fmt.Sprintf("%s/%s-TODO_FILENAME", prefix, tag)
+	return &object_destination{
+		tag:         tag,
+		bucket_name: bucket_name,
+		bucket:      bucket,
+		object_path: object_path,
+		last:        time.Now(),
+		written:     0,
+		builder:     strings.Builder{},
+	}
+}
+
+func (dest *object_destination) FormatBucketPath() string {
+	return fmt.Sprintf("gs://%s/%s", dest.bucket_name, dest.object_path)
+}
 
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
@@ -40,7 +71,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	}
 
 	// set options from output config with
-	output.FLBPluginSetContext(plugin, map[string]string{
+	ctx := map[string]string{
 		// name of the bucket
 		// no default
 		"bucket": output.FLBPluginConfigKey(plugin, "Bucket"),
@@ -55,6 +86,9 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 		// service account in the specified project that I will use to access the bucket
 		// no default (if unset, use inherited credentials from the environment)
+		// inherit security creds from the environment; e.g. be able to use
+		//  	application_default_credentials when available creds specified as the
+		//  	name of a service account (overrides application_default when specified)
 		"serviceAccount": output.FLBPluginConfigKey(plugin, "ServiceAccount"),
 
 		// maximum size (in KiB) held in memory before a chunk is written to the bucket object
@@ -69,11 +103,12 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		// maximum size (in KiB) a bucket object can reach before rolling over to a new object
 		// default 100000
 		// "objectRolloverKiB": output.FLBPluginConfigKey(plugin, "ObjectRolloverKiB")
-	})
+	}
 
-	// inherit security creds from the environment; e.g. be able to use
-	// 	application_default_credentials when available creds specified as the
-	// 	name of a service account (overrides application_default when specified)
+	output.FLBPluginSetContext(plugin, ctx)
+
+	// initialize destinations
+	destinations = make(map[string]object_destination)
 
 	return output.FLB_OK
 }
@@ -81,9 +116,18 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
-
 	config := output.FLBPluginGetContext(ctx).(map[string]string)
+
+	tag_name := C.GoString(tag)
+
+	dest, exists := destinations[tag_name]
+	if !exists {
+		dest = *NewDestination(tag_name, config["bucket"], config["prefix"])
+		destinations[tag_name] = dest
+	}
+
 	dec := output.NewDecoder(data, int(length))
+
 	for {
 		rc, ts, rec := output.GetRecord(dec)
 		if rc != 0 {
@@ -91,18 +135,18 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		}
 		timestamp := ts.(output.FLBTime)
 		var printable strings.Builder
-		printable.WriteString(fmt.Sprintf("[%s, {", timestamp))
+		printable.WriteString(fmt.Sprintf("[%s] %s: [%d, {", "todo", "todo.0", timestamp.Unix()))
 		for key, val := range rec {
 			printable.WriteString(fmt.Sprintf("%s: %v, ", key, val))
 		}
 		printable.WriteString("}]\n")
 
-		obj_path := fmt.Sprintf("%s/%s-TODO_FILENAME", config["prefix"], C.GoString(tag))
-		log.Printf("[%s] Flush to gs://%s/%s", FB_OUTPUT_NAME, config["bucket"], obj_path)
+		log.Printf("[%s] Flush to %s", FB_OUTPUT_NAME, dest.FormatBucketPath())
 
-		if _, err := simpleUpload(printable, config["bucket"], obj_path); err != nil {
-			// output.FLB_ERROR does not retry these bytes
+		if _, err := simpleUpload(printable, dest); err != nil {
+			// FIXME - we probably do not want to kill fluent-bit on any bucket error
 			log.Fatal(err)
+			// output.FLB_ERROR does not retry these bytes
 			return output.FLB_ERROR
 		}
 	}
@@ -115,9 +159,9 @@ func FLBPluginExit() int {
 	return output.FLB_OK
 }
 
-func simpleUpload(builder strings.Builder, bucket_name, obj_path string) (int, error) {
+func simpleUpload(builder strings.Builder, dest object_destination) (int, error) {
 	ctx := context.Background()
-	wc := client.Bucket(bucket_name).Object(obj_path).NewWriter(ctx)
+	wc := client.Bucket(dest.bucket_name).Object(dest.object_path).NewWriter(ctx)
 	n, err := wc.Write([]byte(builder.String()))
 	wc.Close()
 	return n, err
