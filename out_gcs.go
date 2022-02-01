@@ -2,11 +2,10 @@ package main
 
 import (
 	"C"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
-	"strings"
-	"time"
 	"unsafe"
 
 	"cloud.google.com/go/storage"
@@ -18,40 +17,11 @@ const (
 )
 
 var (
-	VERSION      string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
-	client       *storage.Client
-	bucket       *storage.BucketHandle
-	destinations map[string]object_destination
+	VERSION    string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
+	the_client *storage.Client
+	bucket     *storage.BucketHandle
+	workers    map[string](*ObjectWorker)
 )
-
-// manages the lifetime of a gcs object
-type object_destination struct {
-	tag         string
-	bucket_name string
-	bucket      *storage.BucketHandle
-	object_path string
-	last        time.Time
-	written     int64
-	builder     strings.Builder
-}
-
-func NewDestination(tag string, bucket_name, prefix string) *object_destination {
-	bucket := client.Bucket(bucket_name)
-	object_path := fmt.Sprintf("%s/%s-TODO_FILENAME", prefix, tag)
-	return &object_destination{
-		tag:         tag,
-		bucket_name: bucket_name,
-		bucket:      bucket,
-		object_path: object_path,
-		last:        time.Now(),
-		written:     0,
-		builder:     strings.Builder{},
-	}
-}
-
-func (dest *object_destination) FormatBucketPath() string {
-	return fmt.Sprintf("gs://%s/%s", dest.bucket_name, dest.object_path)
-}
 
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
@@ -63,7 +33,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	gcsctx := context.Background()
 	var err error
-	client, err = storage.NewClient(gcsctx)
+	the_client, err = storage.NewClient(gcsctx)
 	if err != nil {
 		output.FLBPluginUnregister(plugin)
 		log.Fatal(err)
@@ -107,8 +77,8 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	output.FLBPluginSetContext(plugin, ctx)
 
-	// initialize destinations
-	destinations = make(map[string]object_destination)
+	// initialize workers
+	workers = make(map[string](*ObjectWorker))
 
 	return output.FLB_OK
 }
@@ -120,13 +90,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	tag_name := C.GoString(tag)
 
-	dest, exists := destinations[tag_name]
+	work, exists := workers[tag_name]
 	if !exists {
-		dest = *NewDestination(tag_name, config["bucket"], config["prefix"])
-		destinations[tag_name] = dest
+		work = NewObjectWorker(tag_name, config["bucket"], config["prefix"])
+		workers[tag_name] = work
 	}
 
 	dec := output.NewDecoder(data, int(length))
+	buf := new(bytes.Buffer)
 
 	for {
 		rc, ts, rec := output.GetRecord(dec)
@@ -134,21 +105,18 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 			break
 		}
 		timestamp := ts.(output.FLBTime)
-		var printable strings.Builder
-		printable.WriteString(fmt.Sprintf("[%s] %s: [%d, {", "todo", "todo.0", timestamp.Unix()))
+		// FIXME display microseconds on timestamp
+		buf.WriteString(fmt.Sprintf("[%s] %s: [%d, {", "todo", "todo.0", timestamp.Unix()))
 		for key, val := range rec {
-			printable.WriteString(fmt.Sprintf("%s: %v, ", key, val))
+			buf.WriteString(fmt.Sprintf("%s: %v, ", key, val))
 		}
-		printable.WriteString("}]\n")
+		buf.WriteString("}]\n")
+	}
 
-		log.Printf("[%s] Flush to %s", FB_OUTPUT_NAME, dest.FormatBucketPath())
+	log.Printf("[%s] Flush to %s", FB_OUTPUT_NAME, work.FormatBucketPath())
 
-		if _, err := simpleUpload(printable, dest); err != nil {
-			// FIXME - we probably do not want to kill fluent-bit on any bucket error
-			log.Fatal(err)
-			// output.FLB_ERROR does not retry these bytes
-			return output.FLB_ERROR
-		}
+	if err := work.Put(the_client, *buf); err != nil {
+		return output.FLB_RETRY
 	}
 
 	return output.FLB_OK
@@ -156,46 +124,11 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 //export FLBPluginExit
 func FLBPluginExit() int {
+	for _, worker := range workers {
+		worker.Stop()
+	}
 	return output.FLB_OK
 }
-
-func simpleUpload(builder strings.Builder, dest object_destination) (int, error) {
-	ctx := context.Background()
-	wc := client.Bucket(dest.bucket_name).Object(dest.object_path).NewWriter(ctx)
-	n, err := wc.Write([]byte(builder.String()))
-	wc.Close()
-	return n, err
-}
-
-// // streamFileUpload uploads an object via a stream.
-// func streamFileUpload(w io.Writer, bucket, object string) error {
-// 	ctx := context.Background()
-// 	client, err := storage.NewClient(ctx)
-// 	if err != nil {
-// 		return fmt.Errorf("storage.NewClient: %v", err)
-// 	}
-// 	defer client.Close()
-//
-// 	b := []byte("Hello world.")
-// 	buf := bytes.NewBuffer(b)
-//
-// 	ctx, cancel := context.WithTimeout(ctx, time.Second*50)
-// 	defer cancel()
-//
-// 	// Upload an object with storage.Writer.
-// 	wc := client.Bucket(bucket).Object(object).NewWriter(ctx)
-// 	wc.ChunkSize = 0 // note retries are not supported for chunk size 0.
-//
-// 	if _, err = io.Copy(wc, buf); err != nil {
-// 		return fmt.Errorf("io.Copy: %v", err)
-// 	}
-// 	// Data can continue to be added to the file until the writer is closed.
-// 	if err := wc.Close(); err != nil {
-// 		return fmt.Errorf("Writer.Close: %v", err)
-// 	}
-//
-// 	return nil
-// }
 
 func main() {
 }
