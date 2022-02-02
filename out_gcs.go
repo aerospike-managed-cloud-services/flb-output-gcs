@@ -42,15 +42,17 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 }
 
 // convert a plugin config string to int or return (, false) to accept the default
-func pluginConfigValueToInt(sval string) (int, bool) {
+func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int, bool) {
+	sval := output.FLBPluginConfigKey(plugin, skey)
+
 	// empty -> use the default
 	if sval == "" {
 		return 0, false
 	}
 
 	if v, err := strconv.Atoi(sval); err != nil {
-		log.Printf("* Warning: BufferSizeKiB %s was not an integer, using default", sval)
-		// can't parse: warn, and use the default
+		log.Printf("** Warning: '%s %s' was not an integer, using default", skey, sval)
+		// can't parse; warn, and use the default
 		return 0, false
 	} else {
 		return v, true
@@ -107,10 +109,10 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		// // default "${inputTag}-${unixTimeStamp}"
 		// objectNameTemplate: "${inputTag}-${unixTimeStamp}",
 	}
-	if bskb, ok := pluginConfigValueToInt(output.FLBPluginConfigKey(plugin, "BufferSizeKiB")); ok {
+	if bskb, ok := pluginConfigValueToInt(plugin, "BufferSizeKiB"); ok {
 		ctx.bufferSizeKiB = bskb
 	}
-	if bts, ok := pluginConfigValueToInt(output.FLBPluginConfigKey(plugin, "BufferTimeoutSeconds")); ok {
+	if bts, ok := pluginConfigValueToInt(plugin, "BufferTimeoutSeconds"); ok {
 		ctx.bufferTimeoutSeconds = bts
 	}
 
