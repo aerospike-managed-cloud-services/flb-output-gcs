@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strconv"
 	"unsafe"
 
 	"cloud.google.com/go/storage"
@@ -23,10 +24,37 @@ var (
 	workers    map[string](*ObjectWorker)
 )
 
+type config struct {
+	bucket               string
+	prefix               string
+	project              string
+	serviceAccount       string
+	bufferSizeKiB        int
+	bufferTimeoutSeconds int
+	// compressed           bool
+	// objectNameTemplate   string
+}
+
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
 	description := fmt.Sprintf("GCS bucket output %s", VERSION)
 	return output.FLBPluginRegister(def, FB_OUTPUT_NAME, description)
+}
+
+// convert a plugin config string to int or return (, false) to accept the default
+func pluginConfigValueToInt(sval string) (int, bool) {
+	// empty -> use the default
+	if sval == "" {
+		return 0, false
+	}
+
+	if v, err := strconv.Atoi(sval); err != nil {
+		log.Printf("* Warning: BufferSizeKiB %s was not an integer, using default", sval)
+		// can't parse: warn, and use the default
+		return 0, false
+	} else {
+		return v, true
+	}
 }
 
 //export FLBPluginInit
@@ -40,39 +68,50 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		return output.FLB_ERROR
 	}
 
-	// set options from output config with
-	ctx := map[string]string{
+	ctx := config{
 		// name of the bucket
-		// no default
-		"bucket": output.FLBPluginConfigKey(plugin, "Bucket"),
+		// required, no default
+		bucket: output.FLBPluginConfigKey(plugin, "Bucket"),
 
 		// bucket prefix, i.e. path
-		// no default
-		"prefix": output.FLBPluginConfigKey(plugin, "Prefix"),
+		// default ""
+		prefix: output.FLBPluginConfigKey(plugin, "Prefix"),
 
 		// GCP project that owns the bucket
-		// no default (if unset, use inherited project from the environment)
-		"project": output.FLBPluginConfigKey(plugin, "Project"),
+		// not required, no default (if unset, use inherited project from the environment)
+		project: output.FLBPluginConfigKey(plugin, "Project"),
 
 		// service account in the specified project that I will use to access the bucket
 		// no default (if unset, use inherited credentials from the environment)
 		// inherit security creds from the environment; e.g. be able to use
 		//  	application_default_credentials when available creds specified as the
 		//  	name of a service account (overrides application_default when specified)
-		"serviceAccount": output.FLBPluginConfigKey(plugin, "ServiceAccount"),
+		serviceAccount: output.FLBPluginConfigKey(plugin, "ServiceAccount"),
 
-		// maximum size (in KiB) held in memory before a chunk is written to the bucket object
+		// maximum size (in KiB) held in memory before an object is written to a bucket
 		// default 5000
-		// "bufferSizeKiB": output.FLBPluginConfigKey(plugin, "BufferSizeKiB")
+		bufferSizeKiB: 5000,
 
 		// maximum time (in s) between writes before a write to the bucket object must occur
 		// (even if bufferSizeKiB has not been reached)
 		// default 300
-		// "bufferTimeoutSeconds": output.FLBPluginConfigKey(plugin, "BufferTimeoutSeconds")
+		bufferTimeoutSeconds: 300,
 
-		// maximum size (in KiB) a bucket object can reach before rolling over to a new object
-		// default 100000
-		// "objectRolloverKiB": output.FLBPluginConfigKey(plugin, "ObjectRolloverKiB")
+		// // should the bucket object be compressed with gzip
+		// // default false
+		// compressed: false,
+
+		// // a template for the object filename that gets created in the bucket. following placeholders are recognized:
+		// // ${inputTag}, ${unixTimeStamp}, ${isoDateTime}, ...
+		// // The object created will be in gs://BUCKET/PREFIX/
+		// // default "${inputTag}-${unixTimeStamp}"
+		// objectNameTemplate: "${inputTag}-${unixTimeStamp}",
+	}
+	if bskb, ok := pluginConfigValueToInt(output.FLBPluginConfigKey(plugin, "BufferSizeKiB")); ok {
+		ctx.bufferSizeKiB = bskb
+	}
+	if bts, ok := pluginConfigValueToInt(output.FLBPluginConfigKey(plugin, "BufferTimeoutSeconds")); ok {
+		ctx.bufferTimeoutSeconds = bts
 	}
 
 	output.FLBPluginSetContext(plugin, ctx)
@@ -86,13 +125,13 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
-	config := output.FLBPluginGetContext(ctx).(map[string]string)
+	cfg := output.FLBPluginGetContext(ctx).(config)
 
 	tag_name := C.GoString(tag)
 
 	work, exists := workers[tag_name]
 	if !exists {
-		work = NewObjectWorker(tag_name, config["bucket"], config["prefix"])
+		work = NewObjectWorker(tag_name, cfg.bucket, cfg.prefix, cfg.bufferSizeKiB)
 		workers[tag_name] = work
 	}
 

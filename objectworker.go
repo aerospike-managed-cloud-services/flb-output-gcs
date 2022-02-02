@@ -21,19 +21,22 @@ type ObjectWorker struct {
 	writer          *storage.Writer
 	written         int64
 	PUT_COUNT_FIXME int
+	buffer          *bytes.Buffer
 }
 
-func NewObjectWorker(tag string, bucket_name, prefix string) *ObjectWorker {
+func NewObjectWorker(tag string, bucket_name, prefix string, size int) *ObjectWorker {
 	last := time.Now()
 	object_path := fmt.Sprintf("%s/%s-%d", prefix, tag, last.Unix())
 	return &ObjectWorker{
-		bucket_name:     bucket_name,
+		bucket_name: bucket_name,
+		// pad the bytes buffer by 5k to help reduce allocations near the boundary of a rollover
+		buffer:          bytes.NewBuffer(make([]byte, (size+5)*1024)),
 		last:            last,
 		object_path:     object_path,
 		prefix:          prefix,
+		PUT_COUNT_FIXME: 0,
 		tag:             tag,
 		written:         0,
-		PUT_COUNT_FIXME: 0,
 	}
 }
 
@@ -42,14 +45,12 @@ func (work *ObjectWorker) FormatBucketPath() string {
 }
 
 // initialize a writer to write data to the object this worker manages
-func (work *ObjectWorker) beginStreaming(client *storage.Client) error {
+func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 	ctx := context.Background()
 
 	work.writer = client.Bucket(work.bucket_name).Object(work.object_path).NewWriter(ctx) // TODO errors
 
 	work.writer.ChunkSize = 256 * 1024 // this is the smallest chunksize you can set and still have buffering
-
-	return nil
 }
 
 // write strings to a worker
@@ -78,12 +79,14 @@ func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
 // roll over to the next gcs object name
 func (work *ObjectWorker) roll(client *storage.Client) error {
 	prev := work.FormatBucketPath()
-	work.writer.Close()
+	work.writer.Close() // FIXME - this can return error
 	work.last = time.Now()
 	work.object_path = fmt.Sprintf("%s/%s-%d", work.prefix, work.tag, work.last.Unix())
 	log.Printf("~~ [%s] rolls over => %s", prev, work.FormatBucketPath())
 
-	return work.beginStreaming(client)
+	work.beginStreaming(client)
+
+	return nil
 }
 
 func (work *ObjectWorker) Stop() error {
