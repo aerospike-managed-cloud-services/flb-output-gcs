@@ -27,7 +27,6 @@ const (
 var (
 	VERSION    string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
 	the_client *storage.Client
-	bucket     *storage.BucketHandle
 	workers    map[string](*ObjectWorker)
 )
 
