@@ -17,6 +17,13 @@ const (
 	FB_OUTPUT_NAME = "gcs"
 )
 
+type CompressionType string
+
+const (
+	CompressionNone CompressionType = "none"
+	CompressionGzip CompressionType = "gzip"
+)
+
 var (
 	VERSION    string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
 	the_client *storage.Client
@@ -31,7 +38,7 @@ type config struct {
 	serviceAccount       string
 	bufferSizeKiB        int
 	bufferTimeoutSeconds int
-	// compressed           bool
+	compression          CompressionType
 	// objectNameTemplate   string
 }
 
@@ -99,9 +106,9 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		// default 300
 		bufferTimeoutSeconds: 300,
 
-		// // should the bucket object be compressed with gzip
-		// // default false
-		// compressed: false,
+		// compression type, allowed values: none; gzip
+		// default "none"
+		compression: CompressionNone,
 
 		// // a template for the object filename that gets created in the bucket. following placeholders are recognized:
 		// // ${inputTag}, ${unixTimeStamp}, ${isoDateTime}, ...
@@ -109,11 +116,24 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		// // default "${inputTag}-${unixTimeStamp}"
 		// objectNameTemplate: "${inputTag}-${unixTimeStamp}",
 	}
+
 	if bskb, ok := pluginConfigValueToInt(plugin, "BufferSizeKiB"); ok {
 		ctx.bufferSizeKiB = bskb
 	}
+
 	if bts, ok := pluginConfigValueToInt(plugin, "BufferTimeoutSeconds"); ok {
 		ctx.bufferTimeoutSeconds = bts
+	}
+
+	if cmpr := output.FLBPluginConfigKey(plugin, "Compression"); cmpr != "" {
+		switch CompressionType(cmpr) {
+		case CompressionNone:
+			ctx.compression = CompressionNone
+		case CompressionGzip:
+			ctx.compression = CompressionGzip
+		default:
+			log.Printf("** Warning: 'Compression %s' should be 'gzip' or 'none'; using default", cmpr)
+		}
 	}
 
 	output.FLBPluginSetContext(plugin, ctx)
