@@ -25,20 +25,20 @@ const (
 )
 
 var (
-	VERSION    string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
-	the_client *storage.Client
-	workers    map[string](*ObjectWorker)
+	VERSION string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
 )
 
-type config struct {
+type outputState struct {
 	bucket               string
-	prefix               string
-	project              string
-	serviceAccount       string
 	bufferSizeKiB        int
 	bufferTimeoutSeconds int
 	compression          CompressionType
+	gcsClient            *storage.Client
 	// objectNameTemplate   string
+	prefix         string
+	project        string
+	serviceAccount string
+	workers        map[string](*ObjectWorker)
 }
 
 //export FLBPluginRegister
@@ -68,18 +68,32 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int, bool) {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	gcsctx := context.Background()
-	var err error
-	the_client, err = storage.NewClient(gcsctx)
+	client, err := storage.NewClient(gcsctx)
 	if err != nil {
 		output.FLBPluginUnregister(plugin)
 		log.Fatal(err)
 		return output.FLB_ERROR
 	}
 
-	ctx := config{
+	ctx := outputState{
 		// name of the bucket
 		// required, no default
 		bucket: output.FLBPluginConfigKey(plugin, "Bucket"),
+
+		// maximum size (in KiB) held in memory before an object is written to a bucket
+		// default 5000
+		bufferSizeKiB: 5000,
+
+		// maximum time (in s) between writes before a write to the bucket object must occur
+		// (even if bufferSizeKiB has not been reached)
+		// default 300
+		bufferTimeoutSeconds: 300,
+
+		// compression type, allowed values: none; gzip
+		// default "none"
+		compression: CompressionNone,
+
+		gcsClient: client,
 
 		// bucket prefix, i.e. path
 		// default ""
@@ -95,19 +109,6 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		//  	application_default_credentials when available creds specified as the
 		//  	name of a service account (overrides application_default when specified)
 		serviceAccount: output.FLBPluginConfigKey(plugin, "ServiceAccount"),
-
-		// maximum size (in KiB) held in memory before an object is written to a bucket
-		// default 5000
-		bufferSizeKiB: 5000,
-
-		// maximum time (in s) between writes before a write to the bucket object must occur
-		// (even if bufferSizeKiB has not been reached)
-		// default 300
-		bufferTimeoutSeconds: 300,
-
-		// compression type, allowed values: none; gzip
-		// default "none"
-		compression: CompressionNone,
 
 		// // a template for the object filename that gets created in the bucket. following placeholders are recognized:
 		// // ${inputTag}, ${unixTimeStamp}, ${isoDateTime}, ...
@@ -135,10 +136,10 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		}
 	}
 
-	output.FLBPluginSetContext(plugin, ctx)
-
 	// initialize workers
-	workers = make(map[string](*ObjectWorker))
+	ctx.workers = make(map[string](*ObjectWorker))
+
+	output.FLBPluginSetContext(plugin, ctx)
 
 	return output.FLB_OK
 }
@@ -146,14 +147,14 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
 	// Gets called with a batch of records to be written to an instance.
-	cfg := output.FLBPluginGetContext(ctx).(config)
+	state := output.FLBPluginGetContext(ctx).(outputState)
 
 	tag_name := C.GoString(tag)
 
-	work, exists := workers[tag_name]
+	work, exists := state.workers[tag_name]
 	if !exists {
-		work = NewObjectWorker(tag_name, cfg.bucket, cfg.prefix, cfg.bufferSizeKiB)
-		workers[tag_name] = work
+		work = NewObjectWorker(tag_name, state.bucket, state.prefix, state.bufferSizeKiB)
+		state.workers[tag_name] = work
 	}
 
 	dec := output.NewDecoder(data, int(length))
@@ -175,18 +176,24 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	log.Printf("[%s] Flush to %s", FB_OUTPUT_NAME, work.FormatBucketPath())
 
-	if err := work.Put(the_client, *buf); err != nil {
+	if err := work.Put(state.gcsClient, *buf); err != nil {
 		return output.FLB_RETRY
 	}
 
 	return output.FLB_OK
 }
 
-//export FLBPluginExit
-func FLBPluginExit() int {
-	for _, worker := range workers {
+//export FLBPluginExitCtx
+func FLBPluginExitCtx(ctx unsafe.Pointer) int {
+	state := output.FLBPluginGetContext(ctx).(outputState)
+	for _, worker := range state.workers {
 		worker.Stop()
 	}
+	return output.FLB_OK
+}
+
+//export FLBPluginExit
+func FLBPluginExit() int {
 	return output.FLB_OK
 }
 
