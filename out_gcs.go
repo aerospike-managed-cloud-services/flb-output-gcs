@@ -25,7 +25,8 @@ const (
 )
 
 var (
-	VERSION string // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
+	VERSION   string                    // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
+	instances map[string](*outputState) = make(map[string](*outputState))
 )
 
 type outputState struct {
@@ -34,6 +35,7 @@ type outputState struct {
 	bufferTimeoutSeconds int
 	compression          CompressionType
 	gcsClient            *storage.Client
+	instanceID           string
 	// objectNameTemplate   string
 	prefix         string
 	project        string
@@ -67,6 +69,15 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
+	// [OUTPUT] sections for the gcs plugin must have an id field
+	instanceID := output.FLBPluginConfigKey(plugin, "id")
+	if instanceID == "" {
+		output.FLBPluginUnregister(plugin)
+		log.Fatal("[gcs] 'id' is a required field and is missing from 1 or more [output] blocks. Check your .conf and add this field.")
+		return output.FLB_ERROR
+	}
+
+	// create a GCS API client for this output instance, or die
 	gcsctx := context.Background()
 	client, err := storage.NewClient(gcsctx)
 	if err != nil {
@@ -75,7 +86,8 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		return output.FLB_ERROR
 	}
 
-	ctx := outputState{
+	// parse configuration for this output instance
+	ost := outputState{
 		// name of the bucket
 		// required, no default
 		bucket: output.FLBPluginConfigKey(plugin, "Bucket"),
@@ -94,6 +106,8 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		compression: CompressionNone,
 
 		gcsClient: client,
+
+		instanceID: instanceID,
 
 		// bucket prefix, i.e. path
 		// default ""
@@ -118,35 +132,36 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	}
 
 	if bskb, ok := pluginConfigValueToInt(plugin, "BufferSizeKiB"); ok {
-		ctx.bufferSizeKiB = bskb
+		ost.bufferSizeKiB = bskb
 	}
 
 	if bts, ok := pluginConfigValueToInt(plugin, "BufferTimeoutSeconds"); ok {
-		ctx.bufferTimeoutSeconds = int(bts)
+		ost.bufferTimeoutSeconds = int(bts)
 	}
 
 	if cmpr := output.FLBPluginConfigKey(plugin, "Compression"); cmpr != "" {
 		switch CompressionType(cmpr) {
 		case CompressionNone:
-			ctx.compression = CompressionNone
+			ost.compression = CompressionNone
 		case CompressionGzip:
-			ctx.compression = CompressionGzip
+			ost.compression = CompressionGzip
 		default:
 			log.Printf("** Warning: 'Compression %s' should be 'gzip' or 'none'; using default", cmpr)
 		}
 	}
 
-	// initialize workers
-	ctx.workers = make(map[string](*ObjectWorker))
+	// initialize workers; this instance will eventually add 1 worker per input to this map
+	ost.workers = make(map[string](*ObjectWorker))
 
-	output.FLBPluginSetContext(plugin, ctx)
+	instances[ost.instanceID] = &ost
+
+	output.FLBPluginSetContext(plugin, ost)
 
 	return output.FLB_OK
 }
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	// Gets called with a batch of records to be written to an instance.
 	state := output.FLBPluginGetContext(ctx).(outputState)
 
 	tag_name := C.GoString(tag)
@@ -160,6 +175,8 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 	dec := output.NewDecoder(data, int(length))
 	buf := new(bytes.Buffer)
 
+	// Gets called with a batch of records to be written to an instance.
+	// Decode each rec
 	for {
 		rc, ts, rec := output.GetRecord(dec)
 		if rc != 0 {
@@ -178,22 +195,34 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		return output.FLB_RETRY
 	}
 
-	log.Printf("[%s] Flushed %s (%db)", FB_OUTPUT_NAME, work.FormatBucketPath(), work.written)
+	log.Printf("[%s] Flushed %s (%db)", FB_OUTPUT_NAME, work.FormatBucketPath(), work.Written)
 
 	return output.FLB_OK
 }
 
-//export FLBPluginExitCtx
-func FLBPluginExitCtx(ctx unsafe.Pointer) int {
-	state := output.FLBPluginGetContext(ctx).(outputState)
-	for _, worker := range state.workers {
-		worker.Stop()
-	}
-	return output.FLB_OK
-}
+// DO NOT USE.
+//
+// FLBPluginExitCtx is called once per output instance but is ONLY passed the context
+// for the first instance (potentially multiple times, same argument).
+//
+// This appears to be a bug in FLBPluginExitCtx
+// https://github.com/fluent/fluent-bit-go/issues/49
+//
+// func FLBPluginExitCtx(ctx unsafe.Pointer) int {
+// 	return output.FLB_OK
+// }
 
 //export FLBPluginExit
 func FLBPluginExit() int {
+	for _, inst := range instances {
+		for _, worker := range inst.workers {
+			// due to the FLBPluginExitCtx bug (see comment above), we just have
+			// to check and see whether each one is closed here.
+			if !worker.Closed {
+				worker.Stop()
+			}
+		}
+	}
 	return output.FLB_OK
 }
 

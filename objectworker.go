@@ -15,31 +15,33 @@ import (
 type ObjectWorker struct {
 	bucketName string
 	bytesMax   int64
+	Closed     bool
 	// idleSecondsMax  int
-	last        time.Time
-	object_path string
-	prefix      string
-	tag         string
-	writer      *storage.Writer
-	written     int64
+	last       time.Time
+	objectPath string
+	prefix     string
+	tag        string
+	writer     *storage.Writer
+	Written    int64
 }
 
 func NewObjectWorker(tag, bucketName, prefix string, sizeKiB int64) *ObjectWorker {
 	last := time.Now()
-	object_path := fmt.Sprintf("%s/%s-%d", prefix, tag, last.Unix())
+	objectPath := fmt.Sprintf("%s/%s-%d", prefix, tag, last.Unix())
 	return &ObjectWorker{
-		bucketName:  bucketName,
-		bytesMax:    sizeKiB * 1024,
-		last:        last,
-		object_path: object_path,
-		prefix:      prefix,
-		tag:         tag,
-		written:     0,
+		bucketName: bucketName,
+		bytesMax:   sizeKiB * 1024,
+		Closed:     false,
+		last:       last,
+		objectPath: objectPath,
+		prefix:     prefix,
+		tag:        tag,
+		Written:    0,
 	}
 }
 
 func (work *ObjectWorker) FormatBucketPath() string {
-	return fmt.Sprintf("gs://%s/%s", work.bucketName, work.object_path)
+	return fmt.Sprintf("gs://%s/%s", work.bucketName, work.objectPath)
 }
 
 // initialize a writer to write data to the object this worker manages
@@ -47,9 +49,9 @@ func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 	ctx := context.Background()
 
 	work.last = time.Now()
-	work.written = 0
-	work.object_path = fmt.Sprintf("%s/%s-%d", work.prefix, work.tag, work.last.Unix())
-	work.writer = client.Bucket(work.bucketName).Object(work.object_path).NewWriter(ctx)
+	work.Written = 0
+	work.objectPath = fmt.Sprintf("%s/%s-%d", work.prefix, work.tag, work.last.Unix())
+	work.writer = client.Bucket(work.bucketName).Object(work.objectPath).NewWriter(ctx)
 	work.writer.ChunkSize = 256 * 1024 // this is the smallest chunksize you can set and still have buffering
 }
 
@@ -62,12 +64,12 @@ func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
 	if written, err := io.Copy(work.writer, &buf); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	} else {
-		work.written += written
+		work.Written += written
 	}
 
 	work.last = time.Now()
 
-	if work.written >= work.bytesMax {
+	if work.Written >= work.bytesMax {
 		work.roll(client) // FIXME handle error
 	}
 
@@ -78,7 +80,7 @@ func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
 func (work *ObjectWorker) roll(client *storage.Client) error {
 	work.writer.Close() // FIXME - this can return error
 	prev := work.FormatBucketPath()
-	log.Printf("~~ [%s] (%d KiB) rolls over => %s", prev, work.written/1024, work.FormatBucketPath())
+	log.Printf("~~ [%s] (%d KiB) rolls over => %s", prev, work.Written/1024, work.FormatBucketPath())
 
 	work.beginStreaming(client)
 
@@ -87,5 +89,7 @@ func (work *ObjectWorker) roll(client *storage.Client) error {
 
 func (work *ObjectWorker) Stop() error {
 	log.Printf("~~ [%s] Stop()", work.FormatBucketPath())
-	return work.writer.Close()
+	err := work.writer.Close()
+	work.Closed = true
+	return err
 }
