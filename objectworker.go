@@ -13,7 +13,7 @@ import (
 
 // manages the lifetime of a gcs object
 type ObjectWorker struct {
-	bucket_name     string
+	bucketName      string
 	last            time.Time
 	object_path     string
 	prefix          string
@@ -24,11 +24,11 @@ type ObjectWorker struct {
 	buffer          *bytes.Buffer
 }
 
-func NewObjectWorker(tag string, bucket_name, prefix string, size int) *ObjectWorker {
+func NewObjectWorker(tag, bucketName, prefix string, size int) *ObjectWorker {
 	last := time.Now()
 	object_path := fmt.Sprintf("%s/%s-%d", prefix, tag, last.Unix())
 	return &ObjectWorker{
-		bucket_name: bucket_name,
+		bucketName: bucketName,
 		// pad the bytes buffer by 5k to help reduce allocations near the boundary of a rollover
 		buffer:          bytes.NewBuffer(make([]byte, (size+5)*1024)),
 		last:            last,
@@ -41,14 +41,14 @@ func NewObjectWorker(tag string, bucket_name, prefix string, size int) *ObjectWo
 }
 
 func (work *ObjectWorker) FormatBucketPath() string {
-	return fmt.Sprintf("gs://%s/%s", work.bucket_name, work.object_path)
+	return fmt.Sprintf("gs://%s/%s", work.bucketName, work.object_path)
 }
 
 // initialize a writer to write data to the object this worker manages
 func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 	ctx := context.Background()
 
-	work.writer = client.Bucket(work.bucket_name).Object(work.object_path).NewWriter(ctx) // TODO errors
+	work.writer = client.Bucket(work.bucketName).Object(work.object_path).NewWriter(ctx) // TODO errors
 
 	work.writer.ChunkSize = 256 * 1024 // this is the smallest chunksize you can set and still have buffering
 }
