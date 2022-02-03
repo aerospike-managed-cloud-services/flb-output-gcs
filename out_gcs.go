@@ -30,7 +30,7 @@ var (
 
 type outputState struct {
 	bucket               string
-	bufferSizeKiB        int
+	bufferSizeKiB        int64
 	bufferTimeoutSeconds int
 	compression          CompressionType
 	gcsClient            *storage.Client
@@ -48,7 +48,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 }
 
 // convert a plugin config string to int or return (, false) to accept the default
-func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int, bool) {
+func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 	sval := output.FLBPluginConfigKey(plugin, skey)
 
 	// empty -> use the default
@@ -56,7 +56,7 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int, bool) {
 		return 0, false
 	}
 
-	if v, err := strconv.Atoi(sval); err != nil {
+	if v, err := strconv.ParseInt(sval, 10, 64); err != nil {
 		log.Printf("** Warning: '%s %s' was not an integer, using default", skey, sval)
 		// can't parse; warn, and use the default
 		return 0, false
@@ -122,7 +122,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	}
 
 	if bts, ok := pluginConfigValueToInt(plugin, "BufferTimeoutSeconds"); ok {
-		ctx.bufferTimeoutSeconds = bts
+		ctx.bufferTimeoutSeconds = int(bts)
 	}
 
 	if cmpr := output.FLBPluginConfigKey(plugin, "Compression"); cmpr != "" {
@@ -174,11 +174,11 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		buf.WriteString("}]\n")
 	}
 
-	log.Printf("[%s] Flush to %s", FB_OUTPUT_NAME, work.FormatBucketPath())
-
 	if err := work.Put(state.gcsClient, *buf); err != nil {
 		return output.FLB_RETRY
 	}
+
+	log.Printf("[%s] Flushed %s (%db)", FB_OUTPUT_NAME, work.FormatBucketPath(), work.written)
 
 	return output.FLB_OK
 }
