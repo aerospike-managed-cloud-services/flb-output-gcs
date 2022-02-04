@@ -168,7 +168,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	work, exists := state.workers[tag_name]
 	if !exists {
-		work = NewObjectWorker(tag_name, state.bucket, state.prefix, state.bufferSizeKiB)
+		work = NewObjectWorker(tag_name, state.bucket, state.prefix, state.bufferSizeKiB, state.bufferTimeoutSeconds)
 		state.workers[tag_name] = work
 	}
 
@@ -218,8 +218,8 @@ func FLBPluginExit() int {
 		for _, worker := range inst.workers {
 			// due to the FLBPluginExitCtx bug (see comment above), we just have
 			// to check and see whether each one is closed here.
-			if !worker.Closed {
-				worker.Stop()
+			if worker.Writer != nil {
+				worker.Commit(inst.gcsClient)
 			}
 		}
 	}
