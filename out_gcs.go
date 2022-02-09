@@ -35,12 +35,11 @@ type outputState struct {
 	bufferTimeoutSeconds int
 	compression          CompressionType
 	gcsClient            *storage.Client
-	instanceID           string
-	// objectNameTemplate   string
-	prefix         string
-	project        string
-	serviceAccount string
-	workers        map[string](*ObjectWorker)
+	outputID             string
+	objectNameTemplate   string
+	project              string
+	serviceAccount       string
+	workers              map[string](*ObjectWorker)
 }
 
 //export FLBPluginRegister
@@ -70,10 +69,10 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// [OUTPUT] sections for the gcs plugin must have an id field
-	instanceID := output.FLBPluginConfigKey(plugin, "id")
-	if instanceID == "" {
+	outputID := output.FLBPluginConfigKey(plugin, "OutputID")
+	if outputID == "" {
 		output.FLBPluginUnregister(plugin)
-		log.Fatal("[gcs] 'id' is a required field and is missing from 1 or more [output] blocks. Check your .conf and add this field.")
+		log.Fatal("[gcs] 'OutputID' is a required field and is missing from 1 or more [output] blocks. Check your .conf and add this field.")
 		return output.FLB_ERROR
 	}
 
@@ -107,11 +106,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 		gcsClient: client,
 
-		instanceID: instanceID,
-
-		// bucket prefix, i.e. path
-		// default ""
-		prefix: output.FLBPluginConfigKey(plugin, "Prefix"),
+		outputID: outputID,
 
 		// GCP project that owns the bucket
 		// not required, no default (if unset, use inherited project from the environment)
@@ -124,11 +119,21 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		//  	name of a service account (overrides application_default when specified)
 		serviceAccount: output.FLBPluginConfigKey(plugin, "ServiceAccount"),
 
-		// // a template for the object filename that gets created in the bucket. following placeholders are recognized:
-		// // ${inputTag}, ${unixTimeStamp}, ${isoDateTime}, ...
-		// // The object created will be in gs://BUCKET/PREFIX/
-		// // default "${inputTag}-${unixTimeStamp}"
-		// objectNameTemplate: "${inputTag}-${unixTimeStamp}",
+		// a template for the object filename that gets created in the bucket. this uses golang text/template syntax.
+		// The following placeholders are recognized:
+		// {{ .InputTag }} the tag of the associated fluent "input" being flushed, e.g. "cpu"
+		// {{ .Timestamp }} timestamp using unix seconds since 1970-01-01
+		// {{ .IsoDateTime }} 14-digit YYYYmmddTHHMMSSZ datetime format, UTC
+		// {{ .Yyyy }} {{ .Mm }} {{ .Dd }} year, month, day
+		// {{ .BeginTime.Format "2006...." }} .beginTime is a time.Time() object and you can use any method on it;
+		// 								      for example, you can call .Format() as shown and get any format you want
+		// The object created will be in gs://BUCKET/
+		// default "{{ .InputTag }}-{{ .Timestamp }}
+		objectNameTemplate: output.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
+	}
+
+	if ost.objectNameTemplate == "" {
+		ost.objectNameTemplate = "{{ .InputTag }}-{{ .Timestamp }}"
 	}
 
 	if bskb, ok := pluginConfigValueToInt(plugin, "BufferSizeKiB"); ok {
@@ -153,7 +158,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	// initialize workers; this instance will eventually add 1 worker per input to this map
 	ost.workers = make(map[string](*ObjectWorker))
 
-	instances[ost.instanceID] = &ost
+	instances[ost.outputID] = &ost
 
 	output.FLBPluginSetContext(plugin, ost)
 
@@ -168,7 +173,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	work, exists := state.workers[tag_name]
 	if !exists {
-		work = NewObjectWorker(tag_name, state.bucket, state.prefix, state.bufferSizeKiB, state.bufferTimeoutSeconds)
+		work = NewObjectWorker(tag_name, state.bucket, state.objectNameTemplate, state.bufferSizeKiB, state.bufferTimeoutSeconds)
 		state.workers[tag_name] = work
 	}
 

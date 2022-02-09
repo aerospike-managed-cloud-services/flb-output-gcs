@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"text/template"
 	"time"
 
 	"cloud.google.com/go/storage"
@@ -19,37 +20,79 @@ type ObjectWorker struct {
 	timer                *time.Timer
 	last                 time.Time
 	objectPath           string
-	prefix               string
 	tag                  string
+	objectTemplate       string
 	Writer               *storage.Writer
 	Written              int64
 }
 
-func NewObjectWorker(tag, bucketName, prefix string, sizeKiB int64, timeoutSeconds int) *ObjectWorker {
+// template input data for constructing the object path
+type objectNameData struct {
+	// env string - customerEnvironment
+	InputTag string
+	// instanceName string - hostname of the log source
+	// instanceId string - cloud provider internal id of the host that produced the log
+	BeginTime   time.Time
+	Dd          string
+	IsoDateTime string
+	Mm          string
+	Timestamp   int64
+	Yyyy        string
+}
+
+func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int) *ObjectWorker {
 	return &ObjectWorker{
 		bucketName:           bucketName,
 		bytesMax:             sizeKiB * 1024,
 		bufferTimeoutSeconds: timeoutSeconds,
-		prefix:               prefix,
 		tag:                  tag,
+		objectTemplate:       objectTemplate,
 		Written:              0,
 	}
 }
 
+// produce a gs:// url for the object being written.
+// if no object is currently being written, substitute "[closed]" in place of
+// object name.
 func (work *ObjectWorker) FormatBucketPath() string {
 	if work.Writer != nil {
 		return fmt.Sprintf("gs://%s/%s", work.bucketName, work.objectPath)
 
 	}
-	return fmt.Sprintf("gs://%s/%s/[closed]", work.bucketName, work.prefix)
+	return "[closed]"
 }
 
-// initialize a writer to write data to the object this worker manages
+// set the Worker objectPath by applying the template to the current time and input tag
+func (work *ObjectWorker) formatObjectName() string {
+	tpl, err := template.New("objectPath").Parse(work.objectTemplate)
+	if err != nil {
+		log.Panicf("Template '%s' could not be parsed", work.objectTemplate)
+	}
+	buf := new(bytes.Buffer)
+	data := objectNameData{
+		InputTag: work.tag,
+		// instanceName
+		// instanceId
+		IsoDateTime: work.last.UTC().Format("20060102T030405Z"),
+		BeginTime:   work.last,
+		Timestamp:   work.last.Unix(),
+		Yyyy:        fmt.Sprintf("%d", work.last.Year()),
+		Mm:          fmt.Sprintf("%02d", work.last.Month()),
+		Dd:          fmt.Sprintf("%02d", work.last.Day()),
+	}
+	if err := tpl.Execute(buf, data); err != nil {
+		log.Panicf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)
+	}
+	return buf.String()
+}
+
+// initialize a writer to write data to a new bucket object
 func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 	ctx := context.Background()
 
 	work.last = time.Now()
-	work.objectPath = fmt.Sprintf("%s/%s-%d", work.prefix, work.tag, work.last.Unix())
+	work.objectPath = work.formatObjectName()
+
 	work.Written = 0
 
 	work.Writer = client.Bucket(work.bucketName).Object(work.objectPath).NewWriter(ctx)
