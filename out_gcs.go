@@ -173,7 +173,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 
 	work, exists := state.workers[tag_name]
 	if !exists {
-		work = NewObjectWorker(tag_name, state.bucket, state.objectNameTemplate, state.bufferSizeKiB, state.bufferTimeoutSeconds)
+		work = NewObjectWorker(
+			tag_name,
+			state.bucket,
+			state.objectNameTemplate,
+			state.bufferSizeKiB,
+			state.bufferTimeoutSeconds,
+			state.compression,
+		)
 		state.workers[tag_name] = work
 	}
 

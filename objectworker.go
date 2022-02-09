@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"compress/gzip"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ type ObjectWorker struct {
 	bucketName           string
 	bytesMax             int64
 	bufferTimeoutSeconds int
+	compression          CompressionType
 	timer                *time.Timer
 	last                 time.Time
 	objectPath           string
@@ -40,11 +42,12 @@ type objectNameData struct {
 	Yyyy        string
 }
 
-func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int) *ObjectWorker {
+func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int, compression CompressionType) *ObjectWorker {
 	return &ObjectWorker{
 		bucketName:           bucketName,
 		bytesMax:             sizeKiB * 1024,
 		bufferTimeoutSeconds: timeoutSeconds,
+		compression:          compression,
 		tag:                  tag,
 		objectTemplate:       objectTemplate,
 		Written:              0,
@@ -63,6 +66,7 @@ func (work *ObjectWorker) FormatBucketPath() string {
 }
 
 // set the Worker objectPath by applying the template to the current time and input tag
+// we also append ".gz" if the file is gzip-compressed
 func (work *ObjectWorker) formatObjectName() string {
 	tpl, err := template.New("objectPath").Parse(work.objectTemplate)
 	if err != nil {
@@ -83,6 +87,11 @@ func (work *ObjectWorker) formatObjectName() string {
 	if err := tpl.Execute(buf, data); err != nil {
 		log.Panicf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)
 	}
+
+	if work.compression == CompressionGzip {
+		buf.Write([]byte(".gz"))
+	}
+
 	return buf.String()
 }
 
@@ -111,13 +120,24 @@ func (work *ObjectWorker) startTimer(client *storage.Client) {
 	})
 }
 
-// write strings to a worker
+// write bytes to a worker
 func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
 	if work.Writer == nil {
 		work.beginStreaming(client)
 	}
 
-	if written, err := io.Copy(work.Writer, &buf); err != nil {
+	// compress the buffer as we go
+	var mybuffer bytes.Buffer
+	if work.compression == CompressionGzip {
+		gzw := gzip.NewWriter(&mybuffer)
+		io.Copy(gzw, &buf)
+		gzw.Close()
+	} else {
+		mybuffer = buf
+	}
+
+	// copy input buffer to gcs, and account for #bytes written (after compression)
+	if written, err := io.Copy(work.Writer, &mybuffer); err != nil {
 		return fmt.Errorf("io.Copy: %v", err)
 	} else {
 		work.Written += written
