@@ -30,16 +30,43 @@ var (
 )
 
 type outputState struct {
-	bucket               string
-	bufferSizeKiB        int64
+	// name of the bucket
+	// required, no default
+	bucket string
+
+	// maximum size (in KiB) held in the request Writer buffer before committing an object to the bucket
+	// default 5000
+	bufferSizeKiB int64
+
+	// maximum time (in s) between writes before the request Writer must commit to the bucket
+	// (even if bufferSizeKiB has not been reached)
+	// default 300
 	bufferTimeoutSeconds int
-	compression          CompressionType
-	gcsClient            *storage.Client
-	outputID             string
-	objectNameTemplate   string
-	project              string
-	serviceAccount       string
-	workers              map[string](*ObjectWorker)
+
+	// compression type, allowed values: none; gzip
+	// default "none"
+	compression CompressionType
+
+	// internal-use; connectable google storage api client
+	gcsClient *storage.Client
+
+	// string to uniquely identify this output plugin instance
+	outputID string
+
+	// a template for the object filename that gets created in the bucket. this uses golang text/template syntax.
+	// The following placeholders are recognized:
+	// {{ .InputTag }} the tag of the associated fluent "input" being flushed, e.g. "cpu"
+	// {{ .Timestamp }} timestamp using unix seconds since 1970-01-01
+	// {{ .IsoDateTime }} 14-digit YYYYmmddTHHMMSSZ datetime format, UTC
+	// {{ .Yyyy }} {{ .Mm }} {{ .Dd }} year, month, day
+	// {{ .BeginTime.Format "2006...." }} .beginTime is a time.Time() object and you can use any method on it;
+	// 								      for example, you can call .Format() as shown and get any format you want
+	// The object created will be in gs://BUCKET/
+	// default "{{ .InputTag }}-{{ .Timestamp }}
+	objectNameTemplate string
+
+	// internal-use; map of inputTag to a gcs api client worker
+	workers map[string](*ObjectWorker)
 }
 
 //export FLBPluginRegister
@@ -87,49 +114,16 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	// parse configuration for this output instance
 	ost := outputState{
-		// name of the bucket
-		// required, no default
-		bucket: output.FLBPluginConfigKey(plugin, "Bucket"),
-
-		// maximum size (in KiB) held in memory before an object is written to a bucket
-		// default 5000
-		bufferSizeKiB: 5000,
-
-		// maximum time (in s) between writes before a write to the bucket object must occur
-		// (even if bufferSizeKiB has not been reached)
-		// default 300
+		bucket:               output.FLBPluginConfigKey(plugin, "Bucket"),
+		bufferSizeKiB:        5000,
 		bufferTimeoutSeconds: 300,
+		compression:          CompressionNone,
+		gcsClient:            client,
+		outputID:             outputID,
+		objectNameTemplate:   output.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
 
-		// compression type, allowed values: none; gzip
-		// default "none"
-		compression: CompressionNone,
-
-		gcsClient: client,
-
-		outputID: outputID,
-
-		// GCP project that owns the bucket
-		// not required, no default (if unset, use inherited project from the environment)
-		project: output.FLBPluginConfigKey(plugin, "Project"),
-
-		// service account in the specified project that I will use to access the bucket
-		// no default (if unset, use inherited credentials from the environment)
-		// inherit security creds from the environment; e.g. be able to use
-		//  	application_default_credentials when available creds specified as the
-		//  	name of a service account (overrides application_default when specified)
-		serviceAccount: output.FLBPluginConfigKey(plugin, "ServiceAccount"),
-
-		// a template for the object filename that gets created in the bucket. this uses golang text/template syntax.
-		// The following placeholders are recognized:
-		// {{ .InputTag }} the tag of the associated fluent "input" being flushed, e.g. "cpu"
-		// {{ .Timestamp }} timestamp using unix seconds since 1970-01-01
-		// {{ .IsoDateTime }} 14-digit YYYYmmddTHHMMSSZ datetime format, UTC
-		// {{ .Yyyy }} {{ .Mm }} {{ .Dd }} year, month, day
-		// {{ .BeginTime.Format "2006...." }} .beginTime is a time.Time() object and you can use any method on it;
-		// 								      for example, you can call .Format() as shown and get any format you want
-		// The object created will be in gs://BUCKET/
-		// default "{{ .InputTag }}-{{ .Timestamp }}
-		objectNameTemplate: output.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
+		// initialize workers; this instance will eventually add 1 worker per input to this map
+		workers: map[string]*ObjectWorker{},
 	}
 
 	if ost.objectNameTemplate == "" {
@@ -154,9 +148,6 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 			log.Printf("** Warning: 'Compression %s' should be 'gzip' or 'none'; using default", cmpr)
 		}
 	}
-
-	// initialize workers; this instance will eventually add 1 worker per input to this map
-	ost.workers = make(map[string](*ObjectWorker))
 
 	instances[ost.outputID] = &ost
 
