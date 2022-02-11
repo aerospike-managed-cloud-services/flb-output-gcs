@@ -37,14 +37,14 @@ Then, create one or more `[OUTPUT]` sections in the top-level config file with `
     Compression gzip
 ```
 
-Plugin Options |   |   |
---- | --- | ---
-*Bucket* | Name of the bucket where we'll store logs | required, no default
-*BufferSizeKiB* | Maximum size (in KiB) held in the request Writer buffer before committing an object to the bucket | default 5000
+Plugin Options         |     |     |
+---------------------- | --- | --- |
+*Bucket*               | Name of the bucket where we'll store logs | required, no default
+*BufferSizeKiB*        | Maximum size (in KiB) held in the request Writer buffer before committing an object to the bucket | default 5000
 *BufferTimeoutSeconds* | Maximum time (in s) between writes before the requst Writer must commit to the bucket (even if bufferSizeKiB has not been reached) | default 300
-*Compression* | Compression type, allowed values: `none`; `gzip` | default `none`
-*OutputID* | String to uniquely identify this output plugin instance | required, no default
-*ObjectNameTemplate* | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}`
+*Compression*          | Compression type, allowed values: `none`; `gzip` | default `none`
+*OutputID*             | String to uniquely identify this output plugin instance | required, no default
+*ObjectNameTemplate*   | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}`
 
 ### ObjectNameTemplate syntax
 
