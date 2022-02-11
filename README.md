@@ -4,7 +4,7 @@ Fluent-bit output plugin to write to GCS buckets
 
 ## Installation
 
-1. Download the [latest release]. You most likely want the file named like: `flb-output-gcs-vX.Y.Z.tar.gz`
+1. Download the [latest release]. You most likely want the file named like: `flb-output-gcs-vX.Y.Z_linux_amd64.tar.gz`
 
 1. Unpack.
 
