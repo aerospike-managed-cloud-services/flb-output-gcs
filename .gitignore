@@ -1,2 +1,6 @@
 /*.code-workspace
 *.so
+*.h
+/node_modules
+
+/flb-output-gcs*.tar.gz

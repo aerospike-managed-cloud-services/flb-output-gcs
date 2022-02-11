@@ -26,12 +26,13 @@ jobs:
           fi
 
       - name: Package release
+        id: package_release
         run: make tarball
 
-      - name: Create GitHub release with gh  ## (replace the tarball name below)
+      - name: Create GitHub release with gh
         run: |
           link=$(tools/release \
             "${{ steps.check_release_conditions.outputs.release_version }}" \
             "${{ secrets.GITHUB_TOKEN }}" \
-            "your-cool-project-${{ steps.check_release_conditions.outputs.release_version }}.tar.gz")
+            "${{ steps.package_release.outputs.release_artifact }}")
           echo "::notice::Release link: $link"
