@@ -9,7 +9,6 @@ jobs:
       - name: Check out repository code
         uses: actions/checkout@v2
 
-      # (replace) - set up the implementation language of choice
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
