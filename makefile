@@ -10,7 +10,7 @@ BATS    := $(shell npm bin)/bats
 FB_BIN  := $(shell which fluent-bit)
 FB_OUTPUT_NAME := gcs
 
-.PHONY: clean test tarball
+.PHONY: clean print-release-artifact tarball test test-simple
 
 all: $(TARGET)
 
@@ -22,7 +22,9 @@ $(TARBALL): $(TARGET)
 
 tarball:
 	$(MAKE) $(TARBALL)
-	@echo "::set-output name=release_artifact::$(TARBALL)"
+
+print-release-artifact:
+	@echo "$(TARBALL)"
 
 clean:
 	rm -f $(TARGET) $(TARBALL)
