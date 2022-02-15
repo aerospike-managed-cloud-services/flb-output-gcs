@@ -10,7 +10,7 @@ BATS    := $(shell npm bin)/bats
 FB_BIN  := $(shell which fluent-bit)
 FB_OUTPUT_NAME := gcs
 
-.PHONY: clean print-release-artifact tarball test test-simple
+.PHONY: clean deps-test print-release-artifact tarball test test-simple
 
 all: $(TARGET)
 
@@ -29,11 +29,19 @@ print-release-artifact:
 clean:
 	rm -f $(TARGET) $(TARBALL)
 
-test:
-	go test
-
 ## test-bats: $(TARGET)
 ## 	cd test; $(BATS) test.bats
 
 test-simple: $(TARGET)
 	$(FB_BIN) -e ./$(TARGET) -c test/fluent-bit.conf 2>&1
+
+deps-test:
+	go get -d github.com/dave/courtney
+
+test:
+	courtney .
+	go tool cover -func coverage.out
+	go tool cover -html coverage.out -o coverage.html
+
+## test-100pct: deps-test
+## 	courtney -e .

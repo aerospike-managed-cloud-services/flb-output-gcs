@@ -69,15 +69,52 @@ type outputState struct {
 	workers map[string](*ObjectWorker)
 }
 
+type flbOutputAPIWrapper struct {
+}
+
+func (*flbOutputAPIWrapper) FLBPluginConfigKey(plugin unsafe.Pointer, skey string) string {
+	return output.FLBPluginConfigKey(plugin, skey)
+}
+
+func (*flbOutputAPIWrapper) FLBPluginRegister(plugin unsafe.Pointer, name string, desc string) int {
+	return output.FLBPluginRegister(plugin, name, desc)
+}
+
+func (*flbOutputAPIWrapper) FLBPluginUnregister(plugin unsafe.Pointer) {
+	output.FLBPluginUnregister(plugin)
+}
+
+func (*flbOutputAPIWrapper) FLBPluginSetContext(plugin unsafe.Pointer, ctx interface{}) {
+	output.FLBPluginSetContext(plugin, ctx)
+}
+
+func (*flbOutputAPIWrapper) FLBPluginGetContext(proxyContext unsafe.Pointer) interface{} {
+	return output.FLBPluginGetContext(proxyContext)
+}
+
+func (*flbOutputAPIWrapper) NewDecoder(data unsafe.Pointer, length int) *output.FLBDecoder {
+	return output.NewDecoder(data, length)
+}
+
+func (*flbOutputAPIWrapper) GetRecord(dec *output.FLBDecoder) (ret int, ts interface{}, rec map[interface{}]interface{}) {
+	return output.GetRecord(dec)
+}
+
+func NewFLBOutputAPI() *flbOutputAPIWrapper {
+	return &flbOutputAPIWrapper{}
+}
+
+var flbAPI IFLBOutputAPI = NewFLBOutputAPI()
+
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
 	description := fmt.Sprintf("GCS bucket output %s", VERSION)
-	return output.FLBPluginRegister(def, FB_OUTPUT_NAME, description)
+	return flbAPI.FLBPluginRegister(def, FB_OUTPUT_NAME, description)
 }
 
 // convert a plugin config string to int or return (, false) to accept the default
 func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
-	sval := output.FLBPluginConfigKey(plugin, skey)
+	sval := flbAPI.FLBPluginConfigKey(plugin, skey)
 
 	// empty -> use the default
 	if sval == "" {
@@ -96,9 +133,9 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// [OUTPUT] sections for the gcs plugin must have an id field
-	outputID := output.FLBPluginConfigKey(plugin, "OutputID")
+	outputID := flbAPI.FLBPluginConfigKey(plugin, "OutputID")
 	if outputID == "" {
-		output.FLBPluginUnregister(plugin)
+		flbAPI.FLBPluginUnregister(plugin)
 		log.Fatal("[gcs] 'OutputID' is a required field and is missing from 1 or more [output] blocks. Check your .conf and add this field.")
 		return output.FLB_ERROR
 	}
@@ -107,20 +144,20 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	gcsctx := context.Background()
 	client, err := storage.NewClient(gcsctx)
 	if err != nil {
-		output.FLBPluginUnregister(plugin)
+		flbAPI.FLBPluginUnregister(plugin)
 		log.Fatal(err)
 		return output.FLB_ERROR
 	}
 
 	// parse configuration for this output instance
 	ost := outputState{
-		bucket:               output.FLBPluginConfigKey(plugin, "Bucket"),
+		bucket:               flbAPI.FLBPluginConfigKey(plugin, "Bucket"),
 		bufferSizeKiB:        5000,
 		bufferTimeoutSeconds: 300,
 		compression:          CompressionNone,
 		gcsClient:            client,
 		outputID:             outputID,
-		objectNameTemplate:   output.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
+		objectNameTemplate:   flbAPI.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
 
 		// initialize workers; this instance will eventually add 1 worker per input to this map
 		workers: map[string]*ObjectWorker{},
@@ -138,7 +175,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		ost.bufferTimeoutSeconds = int(bts)
 	}
 
-	if cmpr := output.FLBPluginConfigKey(plugin, "Compression"); cmpr != "" {
+	if cmpr := flbAPI.FLBPluginConfigKey(plugin, "Compression"); cmpr != "" {
 		switch CompressionType(cmpr) {
 		case CompressionNone:
 			ost.compression = CompressionNone
@@ -151,14 +188,14 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	instances[ost.outputID] = &ost
 
-	output.FLBPluginSetContext(plugin, ost)
+	flbAPI.FLBPluginSetContext(plugin, ost)
 
 	return output.FLB_OK
 }
 
 //export FLBPluginFlushCtx
 func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	state := output.FLBPluginGetContext(ctx).(outputState)
+	state := flbAPI.FLBPluginGetContext(ctx).(outputState)
 
 	tag_name := C.GoString(tag)
 
@@ -175,12 +212,14 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		state.workers[tag_name] = work
 	}
 
-	dec := output.NewDecoder(data, int(length))
+	dec := flbAPI.NewDecoder(data, int(length))
 	buf := new(bytes.Buffer)
 
 	// Gets called with a batch of records to be written to an instance.
 	// Decode each rec
 	for {
+		// FIXME - when we call this through the interface, this works
+		// but the test fails (even if we don't call GetRecord)
 		rc, ts, rec := output.GetRecord(dec)
 		if rc != 0 {
 			break

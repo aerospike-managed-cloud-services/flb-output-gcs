@@ -4,3 +4,5 @@
 /node_modules
 
 /flb-output-gcs*.tar.gz
+/coverage.html
+/coverage.out
