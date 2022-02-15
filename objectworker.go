@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log"
 	"text/template"
 	"time"
 
@@ -42,6 +41,10 @@ type objectNameData struct {
 	Yyyy        string
 }
 
+func (ond *objectNameData) String() string {
+	return fmt.Sprintf("%#v", ond)
+}
+
 func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int, compression CompressionType) *ObjectWorker {
 	return &ObjectWorker{
 		bucketName:           bucketName,
@@ -60,7 +63,6 @@ func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, time
 func (work *ObjectWorker) FormatBucketPath() string {
 	if work.Writer != nil {
 		return fmt.Sprintf("gs://%s/%s", work.bucketName, work.objectPath)
-
 	}
 	return "[closed]"
 }
@@ -70,13 +72,11 @@ func (work *ObjectWorker) FormatBucketPath() string {
 func (work *ObjectWorker) formatObjectName() string {
 	tpl, err := template.New("objectPath").Parse(work.objectTemplate)
 	if err != nil {
-		log.Panicf("Template '%s' could not be parsed", work.objectTemplate)
+		logger.Panic().Msgf("Template '%s' could not be parsed", work.objectTemplate)
 	}
 	buf := new(bytes.Buffer)
 	data := objectNameData{
-		InputTag: work.tag,
-		// instanceName
-		// instanceId
+		InputTag:    work.tag,
 		IsoDateTime: work.last.UTC().Format("20060102T030405Z"),
 		BeginTime:   work.last,
 		Timestamp:   work.last.Unix(),
@@ -85,7 +85,7 @@ func (work *ObjectWorker) formatObjectName() string {
 		Dd:          fmt.Sprintf("%02d", work.last.Day()),
 	}
 	if err := tpl.Execute(buf, data); err != nil {
-		log.Panicf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)
+		logger.Panic().Str("template", work.objectTemplate).Stringer("data", &data).Msgf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)
 	}
 
 	if work.compression == CompressionGzip {
@@ -115,7 +115,7 @@ func (work *ObjectWorker) startTimer(client *storage.Client) {
 	expiration := time.Duration(work.bufferTimeoutSeconds) * time.Second
 
 	work.timer = time.AfterFunc(expiration, func() {
-		log.Printf("[%s] %.1fs without a commit, going to commit", work.FormatBucketPath(), expiration.Seconds())
+		logger.Debug().Float64("duration", expiration.Seconds()).Str("object", work.FormatBucketPath()).Msgf("committing after %.1fs without a commit", expiration.Seconds())
 		work.Commit(client)
 	})
 }
@@ -155,7 +155,7 @@ func (work *ObjectWorker) Commit(client *storage.Client) error {
 	work.Writer.Close() // FIXME - this can return error
 	work.timer.Stop()
 
-	log.Printf("~~ [%s] (%.1f KiB) committed", work.FormatBucketPath(), float64(work.Written)/1024.0)
+	logger.Info().Str("object", work.FormatBucketPath()).Float64("kb", float64(work.Written)/1024.0).Msg("committed")
 
 	work.Writer = nil
 

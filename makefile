@@ -33,7 +33,7 @@ clean:
 ## 	cd test; $(BATS) test.bats
 
 test-simple: $(TARGET)
-	$(FB_BIN) -e ./$(TARGET) -c test/fluent-bit.conf 2>&1
+	OUT_GCS_DEV_LOGGING=yes $(FB_BIN) -e ./$(TARGET) -c test/fluent-bit.conf 2>&1
 
 deps-test:
 	go get -d github.com/dave/courtney

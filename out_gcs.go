@@ -5,12 +5,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 	"unsafe"
 
 	"cloud.google.com/go/storage"
 	"github.com/fluent/fluent-bit-go/output"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -71,6 +73,8 @@ type outputState struct {
 
 var flbAPI IFLBOutputAPI = NewFLBOutputAPI()
 
+var logger zerolog.Logger = log.Logger.With().Str("output", FB_OUTPUT_NAME).Logger()
+
 //export FLBPluginRegister
 func FLBPluginRegister(def unsafe.Pointer) int {
 	description := fmt.Sprintf("GCS bucket output %s", VERSION)
@@ -87,7 +91,7 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 	}
 
 	if v, err := strconv.ParseInt(sval, 10, 64); err != nil {
-		log.Printf("** Warning: '%s %s' was not an integer, using default", skey, sval)
+		logger.Warn().Str(skey, sval).Msg("option value should be an int, using default")
 		// can't parse; warn, and use the default
 		return 0, false
 	} else {
@@ -97,11 +101,19 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
+	// change the logging style for dev testing
+	if dev := os.Getenv("OUT_GCS_DEV_LOGGING"); dev != "" {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
+
 	// [OUTPUT] sections for the gcs plugin must have an id field
 	outputID := flbAPI.FLBPluginConfigKey(plugin, "OutputID")
 	if outputID == "" {
 		flbAPI.FLBPluginUnregister(plugin)
-		log.Fatal("[gcs] 'OutputID' is a required field and is missing from 1 or more [output] blocks. Check your .conf and add this field.")
+		logger.Fatal().Str("field", "OutputID").Msg("a required field is missing from 1 or more [output] blocks. Check your .conf and add this field.")
 		return output.FLB_ERROR
 	}
 
@@ -110,7 +122,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	client, err := storage.NewClient(gcsctx)
 	if err != nil {
 		flbAPI.FLBPluginUnregister(plugin)
-		log.Fatal(err)
+		logger.Fatal().Msg(err.Error())
 		return output.FLB_ERROR
 	}
 
@@ -147,7 +159,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		case CompressionGzip:
 			ost.compression = CompressionGzip
 		default:
-			log.Printf("** Warning: 'Compression %s' should be 'gzip' or 'none'; using default", cmpr)
+			logger.Warn().Msgf("'Compression %s' should be 'gzip' or 'none'; using default", cmpr)
 		}
 	}
 
@@ -202,7 +214,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 		return output.FLB_RETRY
 	}
 
-	log.Printf("[%s] Flushed %s (%db)", FB_OUTPUT_NAME, work.FormatBucketPath(), work.Written)
+	logger.Debug().Str("object", work.FormatBucketPath()).Int64("written-bytes", work.Written).Send()
 
 	return output.FLB_OK
 }
