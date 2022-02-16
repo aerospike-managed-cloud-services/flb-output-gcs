@@ -19,6 +19,7 @@ const (
 	FB_OUTPUT_NAME = "gcs"
 )
 
+// gzip or none
 type CompressionType string
 
 const (
@@ -31,6 +32,12 @@ var (
 	instances map[string](*outputState) = make(map[string](*outputState))
 )
 
+// Settings for this output plugin instance.
+//
+// The workers map creates one worker per input being handled by this instance.
+// The organization of fluent-bit permits multiple output plugins routing
+// different data to different places, but within each stream of events
+// you can have multiple inputs, each of which gets its own worker here.
 type outputState struct {
 	// name of the bucket
 	// required, no default
@@ -71,8 +78,10 @@ type outputState struct {
 	workers map[string](*ObjectWorker)
 }
 
+// global access to the fluent-bit API through this object
 var flbAPI IFLBOutputAPI = NewFLBOutputAPI()
 
+// structured data logger; this constructor makes it easier to replace in a test
 var logger zerolog.Logger = log.Logger.With().Str("output", FB_OUTPUT_NAME).Logger()
 
 //export FLBPluginRegister
@@ -231,6 +240,9 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 // 	return output.FLB_OK
 // }
 
+// At exit, due to the bug above, we visit every worker we have initialized and
+// call Close to make sure the objects get committed. The nil check is the only
+// way we can be sure not to close one twice
 //export FLBPluginExit
 func FLBPluginExit() int {
 	for _, inst := range instances {

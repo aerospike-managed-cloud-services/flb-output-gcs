@@ -41,10 +41,12 @@ type objectNameData struct {
 	Yyyy        string
 }
 
+// raw struct representation for use in Stringer contexts
 func (ond *objectNameData) String() string {
 	return fmt.Sprintf("%#v", ond)
 }
 
+// constructor
 func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int, compression CompressionType) *ObjectWorker {
 	return &ObjectWorker{
 		bucketName:           bucketName,
