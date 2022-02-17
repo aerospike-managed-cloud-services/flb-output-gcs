@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"cloud.google.com/go/storage"
 )
 
 //
@@ -88,19 +90,20 @@ func Test_formatObjectName(t *testing.T) {
 
 func Test_FormatBucketPath(t *testing.T) {
 	work1.last = time.Now()
-	work2.last = time.Now()
+	work1.objectPath = work1.formatObjectName()
+	work1.Writer = &storage.Writer{}
 	tests := []struct {
 		name   string
 		worker *ObjectWorker
 		want   string
 	}{
-		{want: `gs://woopsie.example.com/sipiyou/\d{4}/\d\d/\d\d/\d+$`, worker: work1},
-		{want: `gs://woopsie.example.com/sipiyou/\d{4}/\d\d/\d\d/\d+$`, worker: work2},
+		{want: `gs://woopsie.example.com/sipiyou/\d{4}/\d\d/\d\d/\d+\.gz$`, worker: work1},
+		{want: `\[closed\]`, worker: work2},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			rx := regexp.MustCompile(tt.want)
-			if got := work1.FormatBucketPath(); rx.FindStringIndex(got) == nil {
+			if got := tt.worker.FormatBucketPath(); rx.FindStringIndex(got) == nil {
 				t.Errorf("wanted: `%s` got: `%s`", tt.want, got)
 			}
 		})
