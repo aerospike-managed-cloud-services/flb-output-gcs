@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"unsafe"
 
-	"cloud.google.com/go/storage"
 	"github.com/fluent/fluent-bit-go/output"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -57,7 +56,7 @@ type outputState struct {
 	compression CompressionType
 
 	// internal-use; connectable google storage api client
-	gcsClient *storage.Client
+	gcsClient IStorageClient
 
 	// string to uniquely identify this output plugin instance
 	outputID string
@@ -145,7 +144,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	// create a GCS API client for this output instance, or die
 	gcsctx := context.Background()
-	client, err := storage.NewClient(gcsctx)
+	client, err := NewStorageClient(gcsctx)
 	if err != nil {
 		flbAPI.FLBPluginUnregister(plugin)
 		logger.Fatal().Msg(err.Error())

@@ -8,8 +8,6 @@ import (
 	"io"
 	"text/template"
 	"time"
-
-	"cloud.google.com/go/storage"
 )
 
 // manages the lifetime of a gcs object
@@ -23,7 +21,7 @@ type ObjectWorker struct {
 	objectPath           string
 	tag                  string
 	objectTemplate       string
-	Writer               *storage.Writer
+	Writer               IStorageWriter
 	Written              int64
 }
 
@@ -98,7 +96,7 @@ func (work *ObjectWorker) formatObjectName() string {
 }
 
 // initialize a writer to write data to a new bucket object
-func (work *ObjectWorker) beginStreaming(client *storage.Client) {
+func (work *ObjectWorker) beginStreaming(client IStorageClient) {
 	ctx := context.Background()
 
 	work.last = time.Now()
@@ -106,8 +104,8 @@ func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 
 	work.Written = 0
 
-	work.Writer = client.Bucket(work.bucketName).Object(work.objectPath).NewWriter(ctx)
-	work.Writer.ChunkSize = 256 * 1024 // this is the smallest chunksize you can set and still have buffering
+	work.Writer = client.NewWriterFromBucketObjectPath(work.bucketName, work.objectPath, ctx)
+	work.Writer.SetChunkSize(256 * 1024) // this is the smallest chunksize you can set and still have buffering
 
 	work.startTimer()
 }
@@ -123,7 +121,7 @@ func (work *ObjectWorker) startTimer() {
 }
 
 // write bytes to a worker
-func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
+func (work *ObjectWorker) Put(client IStorageClient, buf bytes.Buffer) error {
 	if work.Writer == nil {
 		work.beginStreaming(client)
 	}
