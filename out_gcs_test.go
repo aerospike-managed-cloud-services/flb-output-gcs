@@ -1,24 +1,29 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 	"unsafe"
 
 	"github.com/fluent/fluent-bit-go/output"
 )
 
+type outputPluginForTest struct{}
+
 type flbOutputAPIForTest struct {
 	config map[string]string
 	ctx    interface{}
 }
 
-type outputPluginForTest struct{}
-
 func (opc *flbOutputAPIForTest) FLBPluginConfigKey(plugin unsafe.Pointer, skey string) string {
 	return opc.config[skey]
 }
 
+var registration map[string]string = make(map[string]string)
+
 func (opc *flbOutputAPIForTest) FLBPluginRegister(plugin unsafe.Pointer, name string, desc string) int {
+	registration["name"] = name
+	registration["desc"] = desc
 	return 0
 }
 
@@ -42,6 +47,25 @@ func (opc *flbOutputAPIForTest) GetRecord(dec *output.FLBDecoder) (int, interfac
 
 type opcConfig map[string]string
 
+// do we capture and correctly set name and desc during reg
+func Test_FLBPluginRegister(t *testing.T) {
+	plugin := unsafe.Pointer(&outputPluginForTest{})
+	flbAPI = &flbOutputAPIForTest{config: opcConfig{}}
+
+	VERSION = "v1.hello"
+
+	for k := range registration {
+		delete(registration, k)
+	}
+
+	rc := FLBPluginRegister(plugin)
+
+	if (rc != 0) || (registration["name"] != FB_OUTPUT_NAME) || (registration["desc"] != "GCS bucket output v1.hello") {
+		t.Errorf(`registration didn't work, %#v`, registration)
+	}
+}
+
+// do we correctly convert (or fallback to default) for number, blank, and not-number
 func Test_pluginConfigValueToInt(t *testing.T) {
 	plugin := unsafe.Pointer(&outputPluginForTest{})
 	config_has_key := flbOutputAPIForTest{config: opcConfig{"some_key": "19"}}
@@ -85,6 +109,52 @@ func Test_pluginConfigValueToInt(t *testing.T) {
 
 			if result != tt.want {
 				t.Errorf(`pluginConfigValueToInt(%v, %s) ! match %d`, plugin, tt.args.skey, tt.want)
+			}
+		})
+	}
+}
+
+func Test_FLBPluginInit(t *testing.T) {
+	plugin := unsafe.Pointer(&outputPluginForTest{})
+	config_good := flbOutputAPIForTest{config: opcConfig{
+		"BufferSizeKiB":        "19",
+		"BufferTimeoutSeconds": "300",
+		"Compression":          "",
+		"Bucket":               "bucketymcbucketface.example.com",
+		"OutputID":             "xyz",
+		"ObjectNameTemplate":   "",
+	}}
+
+	type args struct {
+		myAPI *flbOutputAPIForTest
+	}
+	tests := []struct {
+		name string
+		args args
+		want int64
+	}{
+		{name: "basic bs",
+			args: args{&config_good},
+			want: 19,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			flbAPI = tt.args.myAPI
+			FLBPluginInit(plugin)
+			outConfig := flbAPI.FLBPluginGetContext(plugin).(outputState)
+			expected := outputState{
+				bucket:               "bucketymcbucketface.example.com",
+				bufferSizeKiB:        19,
+				bufferTimeoutSeconds: 300,
+				compression:          CompressionNone,
+				gcsClient:            outConfig.gcsClient,
+				outputID:             "xyz",
+				objectNameTemplate:   "{{ .InputTag }}-{{ .Timestamp }}",
+				workers:              map[string]*ObjectWorker{},
+			}
+			if !reflect.DeepEqual(outConfig, expected) {
+				t.Errorf("outConfig = %#v did not match expected %#v", outConfig, expected)
 			}
 		})
 	}
