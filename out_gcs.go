@@ -108,6 +108,25 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 	}
 }
 
+// get a string value from the config, enforcing that it is set
+func getConfigStrRequired(plugin unsafe.Pointer, skey string) string {
+	var val string
+	if val = flbAPI.FLBPluginConfigKey(plugin, skey); val == "" {
+		flbAPI.FLBPluginUnregister(plugin)
+		logger.Fatal().Str("field", "Bucket").Msgf("required field %s is missing from 1 or more [output] blocks. Check your .conf and add this field.", skey)
+	}
+	return val
+}
+
+// get a string value from the config, substituting the default if blank
+func getConfigStrDefault(plugin unsafe.Pointer, skey, dfl string) string {
+	var val string
+	if val = flbAPI.FLBPluginConfigKey(plugin, skey); val == "" {
+		val = dfl
+	}
+	return val
+}
+
 //export FLBPluginInit
 func FLBPluginInit(plugin unsafe.Pointer) int {
 	// change the logging style for dev testing
@@ -118,13 +137,11 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
 
-	// [OUTPUT] sections for the gcs plugin must have an id field
-	outputID := flbAPI.FLBPluginConfigKey(plugin, "OutputID")
-	if outputID == "" {
-		flbAPI.FLBPluginUnregister(plugin)
-		logger.Fatal().Str("field", "OutputID").Msg("a required field is missing from 1 or more [output] blocks. Check your .conf and add this field.")
-		return output.FLB_ERROR
-	}
+	// [OUTPUT] sections for the gcs plugin must have these fields
+	bucket := getConfigStrRequired(plugin, "Bucket")
+	outputID := getConfigStrRequired(plugin, "OutputID")
+
+	objectNameTemplate := getConfigStrDefault(plugin, "ObjectNameTemplate", "{{ .InputTag }}-{{ .Timestamp }}")
 
 	// create a GCS API client for this output instance, or die
 	gcsctx := context.Background()
@@ -137,20 +154,16 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	// parse configuration for this output instance
 	ost := outputState{
-		bucket:               flbAPI.FLBPluginConfigKey(plugin, "Bucket"),
+		bucket:               bucket,
 		bufferSizeKiB:        5000,
 		bufferTimeoutSeconds: 300,
 		compression:          CompressionNone,
 		gcsClient:            client,
 		outputID:             outputID,
-		objectNameTemplate:   flbAPI.FLBPluginConfigKey(plugin, "ObjectNameTemplate"),
+		objectNameTemplate:   objectNameTemplate,
 
 		// initialize workers; this instance will eventually add 1 worker per input to this map
 		workers: map[string]*ObjectWorker{},
-	}
-
-	if ost.objectNameTemplate == "" {
-		ost.objectNameTemplate = "{{ .InputTag }}-{{ .Timestamp }}"
 	}
 
 	if bskb, ok := pluginConfigValueToInt(plugin, "BufferSizeKiB"); ok {
