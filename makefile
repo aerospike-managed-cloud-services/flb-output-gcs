@@ -10,6 +10,8 @@ BATS    := $(shell npm bin)/bats
 FB_BIN  := $(shell which fluent-bit)
 FB_OUTPUT_NAME := gcs
 
+-include .env
+
 .PHONY: clean deps-test print-release-artifact tarball test test-simple
 
 all: $(TARGET)
