@@ -109,16 +109,16 @@ func (work *ObjectWorker) beginStreaming(client *storage.Client) {
 	work.Writer = client.Bucket(work.bucketName).Object(work.objectPath).NewWriter(ctx)
 	work.Writer.ChunkSize = 256 * 1024 // this is the smallest chunksize you can set and still have buffering
 
-	work.startTimer(client)
+	work.startTimer()
 }
 
 // start the idle timer for this worker's write operation
-func (work *ObjectWorker) startTimer(client *storage.Client) {
+func (work *ObjectWorker) startTimer() {
 	expiration := time.Duration(work.bufferTimeoutSeconds) * time.Second
 
 	work.timer = time.AfterFunc(expiration, func() {
 		logger.Debug().Float64("duration", expiration.Seconds()).Str("object", work.FormatBucketPath()).Msgf("committing after %.1fs without a commit", expiration.Seconds())
-		work.Commit(client)
+		work.Commit()
 	})
 }
 
@@ -140,24 +140,26 @@ func (work *ObjectWorker) Put(client *storage.Client, buf bytes.Buffer) error {
 
 	// copy input buffer to gcs, and account for #bytes written (after compression)
 	if written, err := io.Copy(work.Writer, &mybuffer); err != nil {
-		return fmt.Errorf("io.Copy: %v", err)
+		return err
 	} else {
 		work.Written += written
 	}
 
 	if work.Written >= work.bytesMax {
-		work.Commit(client) // FIXME handle error
+		return work.Commit()
 	}
 
 	return nil
 }
 
 // commit an object being streamed to GCS proper
-func (work *ObjectWorker) Commit(client *storage.Client) error {
-	work.Writer.Close() // FIXME - this can return error
+func (work *ObjectWorker) Commit() error {
+	if err := work.Writer.Close(); err != nil {
+		return err
+	}
 	work.timer.Stop()
 
-	logger.Info().Str("object", work.FormatBucketPath()).Float64("kb", float64(work.Written)/1024.0).Msg("committed")
+	logger.Info().Str("object", work.FormatBucketPath()).Float64("kib", float64(work.Written)/1024.0).Msg("committed")
 
 	work.Writer = nil
 

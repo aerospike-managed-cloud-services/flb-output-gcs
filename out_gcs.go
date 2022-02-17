@@ -263,7 +263,7 @@ func FLBPluginExit() int {
 			// due to the FLBPluginExitCtx bug (see comment above), we just have
 			// to check and see whether each one is closed here.
 			if worker.Writer != nil {
-				worker.Commit(inst.gcsClient)
+				worker.Commit()
 			}
 		}
 	}
