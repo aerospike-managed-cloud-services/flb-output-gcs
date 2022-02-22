@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
+	"io/ioutil"
 	"regexp"
 	"testing"
 	"time"
@@ -151,5 +154,21 @@ func Test_beginStreaming(t *testing.T) {
 	// Should return false, indicating the timer was already stopped by calling Commit()
 	if work1.timer.Stop() {
 		t.Error("The timer was not stopped by calling Commit()")
+	}
+}
+
+func Test_Put(t *testing.T) {
+	ctx := context.Background()
+	sapi := &storageAPIForTest{}
+	cli, _ := sapi.NewClient(ctx)
+
+	buf := bytes.NewBufferString("abc")
+	work1.Put(cli, *buf)
+
+	wri := work1.Writer.(*storageWriterForTest)
+	zreader, _ := gzip.NewReader(wri.buf)
+	defer zreader.Close()
+	if bb, _ := ioutil.ReadAll(zreader); !bytes.Equal(bb, []byte{'a', 'b', 'c'}) {
+		t.Errorf("Put() failed, buffer written was '%s'", bb)
 	}
 }

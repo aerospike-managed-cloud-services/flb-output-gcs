@@ -31,7 +31,7 @@ type storageClientForTest struct {
 }
 
 func (sto *storageClientForTest) NewWriterFromBucketObjectPath(bucket, path string, ctx context.Context) IStorageWriter {
-	return &storageWriterForTest{}
+	return &storageWriterForTest{buf: bytes.NewBuffer([]byte{})}
 }
 
 type storageAPIForTest struct{}
