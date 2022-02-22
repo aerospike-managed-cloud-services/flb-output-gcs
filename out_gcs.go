@@ -273,4 +273,4 @@ func FLBPluginExit() int {
 	return output.FLB_OK
 }
 
-func main() {} //notest
+func main() //notest

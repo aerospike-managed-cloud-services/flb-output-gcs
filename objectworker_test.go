@@ -136,4 +136,20 @@ func Test_beginStreaming(t *testing.T) {
 	if rx.FindStringIndex(work1.objectPath) == nil {
 		t.Errorf("wanted: `%s` got: `%s`", want, work1.objectPath)
 	}
+
+	if work1.Writer == nil {
+		t.Error("Writer was nil before worker was committed")
+	}
+
+	work1.Commit()
+
+	if work1.Writer != nil {
+		t.Error("Writer is dangling on a worker after commit")
+	}
+
+	// If Stop() returns true, the timer was never previously stopped.
+	// Should return false, indicating the timer was already stopped by calling Commit()
+	if work1.timer.Stop() {
+		t.Error("The timer was not stopped by calling Commit()")
+	}
 }
