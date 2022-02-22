@@ -1,3 +1,5 @@
+// wraps cloud.google.com/go/storage to make it easier to unit test; mostly abstract interfaces
+
 package main
 
 import (

@@ -1,4 +1,5 @@
 // wraps github.com/fluent/fluent-bit-go/output to make it easier to unit test
+
 package main
 
 import (
