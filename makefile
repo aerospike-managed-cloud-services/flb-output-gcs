@@ -39,6 +39,7 @@ test-simple: $(TARGET)
 
 deps-test:
 	go get -d github.com/dave/courtney
+	go install github.com/dave/courtney
 
 test:
 	courtney .

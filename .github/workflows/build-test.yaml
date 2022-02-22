@@ -4,7 +4,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Running in response to ${{ github.event_name }}"
+      - run: echo "::notice::Running in response to ${{ github.event_name }}"
 
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -15,4 +15,4 @@ jobs:
           go-version: 1.17
       
       - name: Test
-        run: make test
+        run: make deps-test test
