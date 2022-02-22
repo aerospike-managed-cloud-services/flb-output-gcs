@@ -78,7 +78,10 @@ type outputState struct {
 }
 
 // global access to the fluent-bit API through this object
-var flbAPI IFLBOutputAPI = NewFLBOutputAPI()
+var flbAPI IFLBOutputAPI = &flbOutputAPIWrapper{}
+
+// global access to the gcp storage API through this object
+var storageAPI IStorageAPI = &storageAPIWrapper{}
 
 // structured data logger; this constructor makes it easier to replace in a test
 var logger zerolog.Logger = log.Logger.With().Str("output", FB_OUTPUT_NAME).Logger()
@@ -132,6 +135,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	if dev := os.Getenv("OUT_GCS_DEV_LOGGING"); dev != "" {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 		logger = logger.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+		logger.Info().Str("OUT_GCS_DEV_LOGGING", dev).Msg("Enabling dev-style logging")
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
 	}
@@ -144,7 +148,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 
 	// create a GCS API client for this output instance, or die
 	gcsctx := context.Background()
-	client, err := NewStorageClient(gcsctx)
+	client, err := storageAPI.NewClient(gcsctx)
 	if err != nil {
 		flbAPI.FLBPluginUnregister(plugin)
 		logger.Fatal().Msgf("FLBPluginInit() NewStorageClient() %s", err.Error())

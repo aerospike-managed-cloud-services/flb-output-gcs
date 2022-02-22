@@ -4,46 +4,7 @@ import (
 	"reflect"
 	"testing"
 	"unsafe"
-
-	"github.com/fluent/fluent-bit-go/output"
 )
-
-type outputPluginForTest struct{}
-
-type flbOutputAPIForTest struct {
-	config map[string]string
-	ctx    interface{}
-}
-
-func (opc *flbOutputAPIForTest) FLBPluginConfigKey(plugin unsafe.Pointer, skey string) string {
-	return opc.config[skey]
-}
-
-var registration map[string]string = make(map[string]string)
-
-func (opc *flbOutputAPIForTest) FLBPluginRegister(plugin unsafe.Pointer, name string, desc string) int {
-	registration["name"] = name
-	registration["desc"] = desc
-	return 0
-}
-
-func (opc *flbOutputAPIForTest) FLBPluginSetContext(plugin unsafe.Pointer, ctx interface{}) {
-	opc.ctx = ctx
-}
-
-func (opc *flbOutputAPIForTest) FLBPluginGetContext(proxyContext unsafe.Pointer) interface{} {
-	return opc.ctx
-}
-
-func (opc *flbOutputAPIForTest) FLBPluginUnregister(plugin unsafe.Pointer) {}
-
-func (opc *flbOutputAPIForTest) NewDecoder(data unsafe.Pointer, length int) *output.FLBDecoder {
-	return output.NewDecoder(data, length)
-}
-
-func (opc *flbOutputAPIForTest) GetRecord(dec *output.FLBDecoder) (int, interface{}, map[interface{}]interface{}) {
-	return output.GetRecord(dec)
-}
 
 type opcConfig map[string]string
 
@@ -140,6 +101,7 @@ func Test_FLBPluginInit(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			storageAPI = &storageAPIForTest{}
 			flbAPI = tt.args.myAPI
 			FLBPluginInit(plugin)
 			outConfig := flbAPI.FLBPluginGetContext(plugin).(outputState)

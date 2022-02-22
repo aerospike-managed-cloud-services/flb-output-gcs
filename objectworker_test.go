@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"regexp"
 	"testing"
@@ -110,36 +109,11 @@ func Test_FormatBucketPath(t *testing.T) {
 	}
 }
 
-type storageWriterForTest struct {
-	buf *bytes.Buffer
-}
-
-func (sto *storageWriterForTest) Close() error {
-	return nil
-}
-
-func (sto *storageWriterForTest) Write(b []byte) (n int, err error) {
-	return sto.buf.Write(b)
-}
-
-func (sto *storageWriterForTest) SetChunkSize(n int) {
-}
-
-type storageClientForTest struct {
-}
-
-func (sto *storageClientForTest) NewWriterFromBucketObjectPath(bucket, path string, ctx context.Context) IStorageWriter {
-	return &storageWriterForTest{}
-}
-
-func newStorageClientForTest(ctx context.Context) (IStorageClient, error) {
-	return &storageClientForTest{}, nil
-}
-
 func Test_beginStreaming(t *testing.T) {
 	begin := time.Now()
 	ctx := context.Background()
-	cli, _ := newStorageClientForTest(ctx)
+	sapi := &storageAPIForTest{}
+	cli, _ := sapi.NewClient(ctx)
 
 	work1.Written = 19
 	work1.objectPath = "oh-no"

@@ -18,16 +18,16 @@ type storageWriter struct {
 	writer *storage.Writer
 }
 
-func (sto *storageWriter) SetChunkSize(n int) {
-	sto.writer.ChunkSize = n
+func (stoc *storageWriter) SetChunkSize(n int) {
+	stoc.writer.ChunkSize = n
 }
 
-func (sto *storageWriter) Close() error {
-	return sto.writer.Close()
+func (stoc *storageWriter) Close() error {
+	return stoc.writer.Close()
 }
 
-func (sto *storageWriter) Write(p []byte) (n int, err error) {
-	return sto.writer.Write(p)
+func (stoc *storageWriter) Write(p []byte) (n int, err error) {
+	return stoc.writer.Write(p)
 }
 
 type IStorageClient interface {
@@ -38,13 +38,21 @@ type storageClient struct {
 	client *storage.Client
 }
 
-func (sto *storageClient) NewWriterFromBucketObjectPath(bucket, path string, ctx context.Context) IStorageWriter {
-	writer := sto.client.Bucket(bucket).Object(path).NewWriter(ctx)
+func (stoc *storageClient) NewWriterFromBucketObjectPath(bucket, path string, ctx context.Context) IStorageWriter {
+	writer := stoc.client.Bucket(bucket).Object(path).NewWriter(ctx)
 	ret := &storageWriter{writer}
 	return ret
 }
 
-func NewStorageClient(ctx context.Context) (*storageClient, error) {
+// StorageAPI abstraction for test
+type IStorageAPI interface {
+	NewClient(ctx context.Context) (IStorageClient, error)
+}
+
+// concrete StorageAPI for production
+type storageAPIWrapper struct{}
+
+func (sapi *storageAPIWrapper) NewClient(ctx context.Context) (IStorageClient, error) {
 	var cli *storage.Client
 	cli, err := storage.NewClient(ctx)
 	if err != nil {

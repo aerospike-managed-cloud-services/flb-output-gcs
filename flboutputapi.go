@@ -8,6 +8,7 @@ import (
 	"github.com/fluent/fluent-bit-go/output"
 )
 
+// FLBOutputAPI abstraction for test
 type IFLBOutputAPI interface {
 	FLBPluginConfigKey(plugin unsafe.Pointer, skey string) string
 	FLBPluginRegister(plugin unsafe.Pointer, name string, desc string) int
@@ -18,6 +19,7 @@ type IFLBOutputAPI interface {
 	GetRecord(dec *output.FLBDecoder) (ret int, ts interface{}, rec map[interface{}]interface{})
 }
 
+// concreae FLBOutputAPI for production
 type flbOutputAPIWrapper struct {
 }
 
@@ -47,8 +49,4 @@ func (*flbOutputAPIWrapper) NewDecoder(data unsafe.Pointer, length int) *output.
 
 func (*flbOutputAPIWrapper) GetRecord(dec *output.FLBDecoder) (ret int, ts interface{}, rec map[interface{}]interface{}) {
 	return output.GetRecord(dec)
-}
-
-func NewFLBOutputAPI() *flbOutputAPIWrapper {
-	return &flbOutputAPIWrapper{}
 }
