@@ -147,7 +147,7 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 	client, err := NewStorageClient(gcsctx)
 	if err != nil {
 		flbAPI.FLBPluginUnregister(plugin)
-		logger.Fatal().Msg(err.Error())
+		logger.Fatal().Msgf("FLBPluginInit() NewStorageClient() %s", err.Error())
 		return output.FLB_ERROR
 	}
 
