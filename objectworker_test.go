@@ -13,22 +13,27 @@ import (
 //
 // FIXTURES
 //
-var work1 = NewObjectWorker(
-	"sipiyou",
-	"woopsie.example.com",
-	"{{.InputTag}}/{{.Yyyy}}/{{.Mm}}/{{.Dd}}/{{.Timestamp}}",
-	12345,
-	1234,
-	CompressionGzip,
-)
-var work2 = NewObjectWorker(
-	"mermermy",
-	"woopsie.example.com",
-	"{{.IsoDateTime}}",
-	12345,
-	1234,
-	CompressionNone,
-)
+func newWork1() *ObjectWorker {
+	return NewObjectWorker(
+		"sipiyou",
+		"woopsie.example.com",
+		"{{.InputTag}}/{{.Yyyy}}/{{.Mm}}/{{.Dd}}/{{.Timestamp}}",
+		12345,
+		1234,
+		CompressionGzip,
+	)
+}
+
+func newWork2() *ObjectWorker {
+	return NewObjectWorker("mermermy",
+		"woopsie.example.com",
+		"{{.IsoDateTime}}",
+		12345,
+		1234,
+		CompressionNone,
+	)
+
+}
 
 ////////////
 
@@ -68,6 +73,8 @@ func Test_objectNameData_String(t *testing.T) {
 }
 
 func Test_formatObjectName(t *testing.T) {
+	work1 := newWork1()
+	work2 := newWork2()
 	work1.last = time.Now()
 	work2.last = time.Now()
 	tests := []struct {
@@ -91,6 +98,8 @@ func Test_formatObjectName(t *testing.T) {
 }
 
 func Test_FormatBucketPath(t *testing.T) {
+	work1 := newWork1()
+	work2 := newWork2()
 	work1.last = time.Now()
 	work1.objectPath = work1.formatObjectName()
 	work1.Writer = &storageWriter{}
@@ -118,6 +127,7 @@ func Test_beginStreaming(t *testing.T) {
 	sapi := &storageAPIForTest{}
 	cli, _ := sapi.NewClient(ctx)
 
+	work1 := newWork1()
 	work1.Written = 19
 	work1.objectPath = "oh-no"
 
@@ -157,18 +167,44 @@ func Test_beginStreaming(t *testing.T) {
 	}
 }
 
-func Test_Put(t *testing.T) {
+// ObjectWorker.Put() with a gzip stream
+func Test_Put_gzip(t *testing.T) {
 	ctx := context.Background()
 	sapi := &storageAPIForTest{}
 	cli, _ := sapi.NewClient(ctx)
 
-	buf := bytes.NewBufferString("abc")
+	buf := bytes.NewBufferString("abz")
+	work1 := newWork1()
+
 	work1.Put(cli, *buf)
 
 	wri := work1.Writer.(*storageWriterForTest)
 	zreader, _ := gzip.NewReader(wri.buf)
 	defer zreader.Close()
-	if bb, _ := ioutil.ReadAll(zreader); !bytes.Equal(bb, []byte{'a', 'b', 'c'}) {
+	if bb, _ := ioutil.ReadAll(zreader); !bytes.Equal(bb, []byte{'a', 'b', 'z'}) {
 		t.Errorf("Put() failed, buffer written was '%s'", bb)
+	}
+}
+
+// ObjectWorker.Put() with uncompressed stream, and we exceed the byte limit
+func Test_Put_plain_commit(t *testing.T) {
+	ctx := context.Background()
+	sapi := &storageAPIForTest{}
+	cli, _ := sapi.NewClient(ctx)
+
+	buf := bytes.NewBufferString("abc")
+	work2 := newWork2()
+	work2.bytesMax = 2
+
+	work2.beginStreaming(cli)
+	wri := work2.Writer.(*storageWriterForTest)
+	work2.Put(cli, *buf)
+
+	if work2.Writer != nil {
+		t.Errorf("work2.Writer should have been closed after write of 3 bytes, but was %#v", work2.Writer)
+	}
+
+	if wri.buf.String() != "abc" {
+		t.Errorf("Put() failed, buffer written was '%s'", wri.buf.String())
 	}
 }

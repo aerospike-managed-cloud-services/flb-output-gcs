@@ -71,7 +71,7 @@ func (work *ObjectWorker) FormatBucketPath() string {
 // we also append ".gz" if the file is gzip-compressed
 func (work *ObjectWorker) formatObjectName() string {
 	tpl, err := template.New("objectPath").Parse(work.objectTemplate)
-	if err != nil {
+	if err != nil { //notest
 		logger.Panic().Msgf("Template '%s' could not be parsed", work.objectTemplate)
 	}
 	buf := new(bytes.Buffer)
@@ -84,7 +84,7 @@ func (work *ObjectWorker) formatObjectName() string {
 		Mm:          fmt.Sprintf("%02d", work.last.Month()),
 		Dd:          fmt.Sprintf("%02d", work.last.Day()),
 	}
-	if err := tpl.Execute(buf, data); err != nil {
+	if err := tpl.Execute(buf, data); err != nil { //notest
 		logger.Panic().Str("template", work.objectTemplate).Stringer("data", &data).Msgf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)
 	}
 
@@ -115,7 +115,8 @@ func (work *ObjectWorker) startTimer() {
 	expiration := time.Duration(work.bufferTimeoutSeconds) * time.Second
 
 	work.timer = time.AfterFunc(expiration, func() {
-		logger.Debug().Float64("duration", expiration.Seconds()).Str("object", work.FormatBucketPath()).Msgf("committing after %.1fs without a commit", expiration.Seconds())
+		dur := expiration.Seconds()
+		logger.Debug().Float64("duration", dur).Str("object", work.FormatBucketPath()).Msgf("committing after %.1fs without a commit", dur)
 		work.Commit()
 	})
 }
