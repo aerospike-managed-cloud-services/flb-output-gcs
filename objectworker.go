@@ -12,17 +12,17 @@ import (
 
 // manages the lifetime of a gcs object
 type ObjectWorker struct {
-	bucketName           string
-	bytesMax             int64
-	bufferTimeoutSeconds int
-	compression          CompressionType
-	timer                *time.Timer
-	last                 time.Time
-	objectPath           string
-	tag                  string
-	objectTemplate       string
-	Writer               IStorageWriter
-	Written              int64
+	bucketName         string
+	bytesMax           int64
+	bufferTimeoutMicro int64
+	compression        CompressionType
+	timer              *time.Timer
+	last               time.Time
+	objectPath         string
+	tag                string
+	objectTemplate     string
+	Writer             IStorageWriter
+	Written            int64
 }
 
 // template input data for constructing the object path
@@ -47,13 +47,13 @@ func (ond *objectNameData) String() string {
 // constructor
 func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int, compression CompressionType) *ObjectWorker {
 	return &ObjectWorker{
-		bucketName:           bucketName,
-		bytesMax:             sizeKiB * 1024,
-		bufferTimeoutSeconds: timeoutSeconds,
-		compression:          compression,
-		tag:                  tag,
-		objectTemplate:       objectTemplate,
-		Written:              0,
+		bucketName:         bucketName,
+		bytesMax:           sizeKiB * 1024,
+		bufferTimeoutMicro: int64(timeoutSeconds) * 1_000_000,
+		compression:        compression,
+		tag:                tag,
+		objectTemplate:     objectTemplate,
+		Written:            0,
 	}
 }
 
@@ -112,7 +112,7 @@ func (work *ObjectWorker) beginStreaming(client IStorageClient) {
 
 // start the idle timer for this worker's write operation
 func (work *ObjectWorker) startTimer() {
-	expiration := time.Duration(work.bufferTimeoutSeconds) * time.Second
+	expiration := time.Duration(work.bufferTimeoutMicro) * time.Microsecond
 
 	work.timer = time.AfterFunc(expiration, func() {
 		dur := expiration.Seconds()

@@ -35,8 +35,12 @@ func newWork2() *ObjectWorker {
 
 }
 
+// no actual state is held here, so we'll just make one of these globally
+var sapi = &storageAPIForTest{}
+
 ////////////
 
+// do we pretty-print an objectNameData{}?
 func Test_objectNameData_String(t *testing.T) {
 	ond := objectNameData{
 		InputTag:    "hello",
@@ -72,6 +76,8 @@ func Test_objectNameData_String(t *testing.T) {
 	}
 }
 
+// do we create a formatted path out of our objectNameData{} and template?
+// do we attach the .gz extension when appropriate?
 func Test_formatObjectName(t *testing.T) {
 	work1 := newWork1()
 	work2 := newWork2()
@@ -97,6 +103,8 @@ func Test_formatObjectName(t *testing.T) {
 	}
 }
 
+// do we create a full gs:// url out of our worker, template, and compression flag?
+// do we present a closed path when the worker is not in a writeable state?
 func Test_FormatBucketPath(t *testing.T) {
 	work1 := newWork1()
 	work2 := newWork2()
@@ -121,10 +129,10 @@ func Test_FormatBucketPath(t *testing.T) {
 	}
 }
 
+// do we set up and tear down the bucket writing objects when asked to begin streaming?
 func Test_beginStreaming(t *testing.T) {
 	begin := time.Now()
 	ctx := context.Background()
-	sapi := &storageAPIForTest{}
 	cli, _ := sapi.NewClient(ctx)
 
 	work1 := newWork1()
@@ -167,10 +175,9 @@ func Test_beginStreaming(t *testing.T) {
 	}
 }
 
-// ObjectWorker.Put() with a gzip stream
+// ObjectWorker.Put() with a gzip stream, do we produce the write stream of bytes?
 func Test_Put_gzip(t *testing.T) {
 	ctx := context.Background()
-	sapi := &storageAPIForTest{}
 	cli, _ := sapi.NewClient(ctx)
 
 	buf := bytes.NewBufferString("abz")
@@ -186,10 +193,9 @@ func Test_Put_gzip(t *testing.T) {
 	}
 }
 
-// ObjectWorker.Put() with uncompressed stream, and we exceed the byte limit
+// ObjectWorker.Put() with uncompressed stream, and we exceed the byte limit, do we commit automatically?
 func Test_Put_plain_commit(t *testing.T) {
 	ctx := context.Background()
-	sapi := &storageAPIForTest{}
 	cli, _ := sapi.NewClient(ctx)
 
 	buf := bytes.NewBufferString("abc")
@@ -207,4 +213,27 @@ func Test_Put_plain_commit(t *testing.T) {
 	if wri.buf.String() != "abc" {
 		t.Errorf("Put() failed, buffer written was '%s'", wri.buf.String())
 	}
+}
+
+// do we commit automatically when a timer expires?
+func Test_timerExpired(t *testing.T) {
+	work2 := newWork2()
+	work2.bufferTimeoutMicro = 3
+
+	ctx := context.Background()
+	sapi := &storageAPIForTest{}
+	cli, _ := sapi.NewClient(ctx)
+	work2.beginStreaming(cli)
+
+	if work2.Writer == nil {
+		t.Error("work2.Writer was nil after calling beginStreaming, something's up")
+	}
+
+	t.Log("sleeping for 1ms to force the timer (0.003ms) to expire")
+	time.Sleep(1 * time.Millisecond)
+
+	if work2.Writer != nil {
+		t.Error("work2.Writer was left dangling after the timer expiration should have caused a commit")
+	}
+
 }
