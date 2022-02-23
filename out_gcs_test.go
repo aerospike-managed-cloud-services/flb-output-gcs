@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"reflect"
 	"testing"
 	"unsafe"
@@ -75,49 +76,104 @@ func Test_pluginConfigValueToInt(t *testing.T) {
 	}
 }
 
-func Test_FLBPluginInit(t *testing.T) {
-	plugin := unsafe.Pointer(&outputPluginForTest{})
-	config_good := flbOutputAPIForTest{config: opcConfig{
+// do we convert the text config into a working configured outputState;
+// can we also do that twice, and then clean up and shut down both?
+func Test_FLBPluginInit_Exit(t *testing.T) {
+	// swap production storageAPI with a stub to prevent actual access
+	// to gcp during this test
+	storageAPI = &storageAPIForTest{}
+
+	// build a "plugin" that just holds our config strings
+	plugin1 := unsafe.Pointer(&outputPluginForTest{})
+	config1 := flbOutputAPIForTest{config: opcConfig{
 		"BufferSizeKiB":        "19",
 		"BufferTimeoutSeconds": "300",
 		"Compression":          "",
 		"Bucket":               "bucketymcbucketface.example.com",
-		"OutputID":             "xyz",
+		"OutputID":             "1",
 		"ObjectNameTemplate":   "",
 	}}
 
-	type args struct {
-		myAPI *flbOutputAPIForTest
+	// set production flbAPI to this stub since there is no real fluent-bit
+	// process that owns this thread
+	flbAPI = &config1
+
+	// init #1
+	FLBPluginInit(plugin1)
+
+	// make assertions about the config conversion that must have occurred
+	outConfig1 := flbAPI.FLBPluginGetContext(plugin1).(outputState)
+	expected := outputState{
+		bucket:               "bucketymcbucketface.example.com",
+		bufferSizeKiB:        19,
+		bufferTimeoutSeconds: 300,
+		compression:          CompressionNone,
+		gcsClient:            outConfig1.gcsClient,
+		outputID:             "1",
+		objectNameTemplate:   "{{ .InputTag }}-{{ .Timestamp }}",
+		workers:              map[string]*ObjectWorker{},
 	}
-	tests := []struct {
-		name string
-		args args
-		want int64
-	}{
-		{name: "basic bs",
-			args: args{&config_good},
-			want: 19,
-		},
+	if !reflect.DeepEqual(outConfig1, expected) {
+		t.Errorf("outConfig = %#v did not match expected %#v", outConfig1, expected)
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			storageAPI = &storageAPIForTest{}
-			flbAPI = tt.args.myAPI
-			FLBPluginInit(plugin)
-			outConfig := flbAPI.FLBPluginGetContext(plugin).(outputState)
-			expected := outputState{
-				bucket:               "bucketymcbucketface.example.com",
-				bufferSizeKiB:        19,
-				bufferTimeoutSeconds: 300,
-				compression:          CompressionNone,
-				gcsClient:            outConfig.gcsClient,
-				outputID:             "xyz",
-				objectNameTemplate:   "{{ .InputTag }}-{{ .Timestamp }}",
-				workers:              map[string]*ObjectWorker{},
+
+	//
+	// continue: perform another init, and then call FLBPluginExit() to ensure cleanup succeeds
+	//
+	// build a "plugin" that just holds our config strings
+	plugin2 := unsafe.Pointer(&outputPluginForTest{})
+	config2 := flbOutputAPIForTest{config: opcConfig{
+		"BufferSizeKiB":        "19",
+		"BufferTimeoutSeconds": "300",
+		"Compression":          "",
+		"Bucket":               "bucketymcbucketface.example.com",
+		"OutputID":             "2",
+		"ObjectNameTemplate":   "",
+	}}
+
+	// This is ~cheating~; we replace the global flbAPI again.
+	// At the moment this is ok due to the implementation detail that we don't
+	// reference this global during Exit
+	flbAPI = &config2
+
+	// init #2
+	FLBPluginInit(plugin2)
+
+	// let's also beginStreaming on both instances so we have something to clean up
+	ctx := context.Background()
+	cli, _ := storageAPI.NewClient(ctx)
+
+	work1 := NewObjectWorker(
+		"1",
+		"bucketymcbucketface.example.com",
+		"2-{{.Timestamp}}",
+		19,
+		19,
+		CompressionNone,
+	)
+	outConfig1.workers["1"] = work1
+	work1.beginStreaming(cli)
+
+	work2 := NewObjectWorker(
+		"2",
+		"bucketymcbucketface.example.com",
+		"2-{{.Timestamp}}",
+		19,
+		19,
+		CompressionNone,
+	)
+	outConfig2 := flbAPI.FLBPluginGetContext(plugin2).(outputState)
+	outConfig2.workers["2"] = work2
+	work2.beginStreaming(cli)
+
+	// now start cleaning these up
+	FLBPluginExit()
+
+	for _, inst := range instances {
+		for _, worker := range inst.workers {
+			if worker.Writer != nil {
+				t.Errorf("%s/%s .Writer was not cleaned up during Exit", inst.outputID, worker.formatObjectName())
 			}
-			if !reflect.DeepEqual(outConfig, expected) {
-				t.Errorf("outConfig = %#v did not match expected %#v", outConfig, expected)
-			}
-		})
+		}
 	}
 }
