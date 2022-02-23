@@ -262,6 +262,7 @@ func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int 
 //export FLBPluginExit
 func FLBPluginExit() int {
 	for _, inst := range instances {
+		logger.Debug().Str("outputID", inst.outputID).Msgf("cleaning up instance %s", inst.outputID)
 		for _, worker := range inst.workers {
 			// due to the FLBPluginExitCtx bug (see comment above), we just have
 			// to check and see whether each one is closed here.
