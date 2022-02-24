@@ -196,41 +196,43 @@ func FLBPluginInit(plugin unsafe.Pointer) int {
 }
 
 //export FLBPluginFlushCtx
-func FLBPluginFlushCtx(ctx, data unsafe.Pointer, length C.int, tag *C.char) int {
-	state := flbAPI.FLBPluginGetContext(ctx).(outputState)
+func FLBPluginFlushCtx(plugin, data unsafe.Pointer, length C.int, tag *C.char) int {
+	//notest
+	state := flbAPI.FLBPluginGetContext(plugin).(outputState)
+	return flbPluginFlushCtxGo(&state, data, int(length), C.GoString(tag))
+}
 
-	tag_name := C.GoString(tag)
-
-	work, exists := state.workers[tag_name]
+// higher-level flush implementation accepting parameters which are mostly gotypes instead of Ctypes
+func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, tagName string) int {
+	work, exists := state.workers[tagName]
 	if !exists {
 		work = NewObjectWorker(
-			tag_name,
+			tagName,
 			state.bucket,
 			state.objectNameTemplate,
 			state.bufferSizeKiB,
 			state.bufferTimeoutSeconds,
 			state.compression,
 		)
-		state.workers[tag_name] = work
+		state.workers[tagName] = work
 	}
 
-	dec := flbAPI.NewDecoder(data, int(length))
+	dec := flbAPI.NewDecoder(data, length)
 	buf := new(bytes.Buffer)
 
 	// Gets called with a batch of records to be written to an instance.
 	// Decode each rec
 	for {
-		// FIXME - when we call this through the interface, this works
-		// but the test fails (even if we don't call GetRecord)
-		rc, ts, rec := output.GetRecord(dec)
+		rc, ts, rec := flbAPI.GetRecord(dec)
 		if rc != 0 {
 			break
 		}
-		timestamp := ts.(output.FLBTime)
-		// FIXME display microseconds on timestamp
-		buf.WriteString(fmt.Sprintf("[%s] %s: [%d, {", "todo", "todo.0", timestamp.Unix()))
+		timestamp := (ts.(output.FLBTime)).UnixMicro()
+		buf.WriteString(
+			fmt.Sprintf("%s: [%d.%d, {", tagName, timestamp/1e6, timestamp%1e6),
+		)
 		for key, val := range rec {
-			buf.WriteString(fmt.Sprintf("%s: %v, ", key, val))
+			buf.WriteString(fmt.Sprintf(`"%s": %v, `, key, val))
 		}
 		buf.WriteString("}]\n")
 	}
