@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"reflect"
+	"regexp"
 	"testing"
 	"unsafe"
 )
@@ -175,5 +176,43 @@ func Test_FLBPluginInit_Exit(t *testing.T) {
 				t.Errorf("%s/%s .Writer was not cleaned up during Exit", inst.outputID, worker.formatObjectName())
 			}
 		}
+	}
+}
+
+// Some hardcoded data collected and packed into the correct messagepack structure from a mem.local output.
+// We'll use this to test a flush
+var memRecordForTest = []byte{146, 215, 0, 98, 22, 229, 124, 13, 208, 71, 170, 134, 169, 77, 101, 109, 46, 116, 111, 116, 97, 108, 206, 0, 93, 1, 128, 168, 77, 101, 109, 46, 117, 115, 101, 100, 206, 0, 78, 48, 176, 168, 77, 101, 109, 46, 102, 114, 101, 101, 206, 0, 14, 208, 208, 170, 83, 119, 97, 112, 46, 116, 111, 116, 97, 108, 206, 0, 63, 255, 252, 169, 83, 119, 97, 112, 46, 117, 115, 101, 100, 205, 44, 0, 169, 83, 119, 97, 112, 46, 102, 114, 101, 101, 206, 0, 63, 211, 252, 146, 215, 0, 98, 22, 229, 125, 13, 125, 252, 206, 134, 169, 77, 101, 109, 46, 116, 111, 116, 97, 108, 206, 0, 93, 1, 128, 168, 77, 101, 109, 46, 117, 115, 101, 100, 206, 0, 78, 48, 200, 168, 77, 101, 109, 46, 102, 114, 101, 101, 206, 0, 14, 208, 184, 170, 83, 119, 97, 112, 46, 116, 111, 116, 97, 108, 206, 0, 63, 255, 252, 169, 83, 119, 97, 112, 46, 117, 115, 101, 100, 205, 44, 0, 169, 83, 119, 97, 112, 46, 102, 114, 101, 101, 206, 0, 63, 211, 252}
+
+// do we write records to our fake output buffer when flushed?
+func Test_flbPluginFlushCtxGo(t *testing.T) {
+	// swap production storageAPI with a stub to prevent actual access
+	// to gcp during this test.
+	storageAPI = &storageAPIForTest{}
+
+	gcsClient, _ := storageAPI.NewClient(context.Background())
+	state := outputState{
+		bucket:               "bucketymcbucketface.example.com",
+		bufferSizeKiB:        19,
+		bufferTimeoutSeconds: 300,
+		compression:          CompressionNone,
+		gcsClient:            gcsClient,
+		outputID:             "1",
+		objectNameTemplate:   "{{ .InputTag }}-{{ .Timestamp }}",
+		workers:              map[string]*ObjectWorker{},
+	}
+
+	// We're obliged to do a conversion with a package function because Go does
+	// not permit the "C" import in tests
+	cbytePtr := goBytesToCBytes(memRecordForTest)
+
+	flbPluginFlushCtxGo(&state, cbytePtr, len(memRecordForTest), "my-tag")
+
+	wri := state.workers["my-tag"].Writer.(*storageWriterForTest)
+	got := wri.buf.String()
+
+	want := `my-tag: \[\d{10}\.\d{6}, {"`
+	rx := regexp.MustCompile(want)
+	if matches := rx.FindAllString(got, -1); len(matches) != 2 {
+		t.Errorf("wanted: `%s` (x2)  got: %#v", want, matches)
 	}
 }

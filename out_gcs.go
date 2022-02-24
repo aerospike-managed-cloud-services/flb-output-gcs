@@ -14,23 +14,6 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const (
-	FB_OUTPUT_NAME = "gcs"
-)
-
-// gzip or none
-type CompressionType string
-
-const (
-	CompressionNone CompressionType = "none"
-	CompressionGzip CompressionType = "gzip"
-)
-
-var (
-	VERSION   string                    // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
-	instances map[string](*outputState) = make(map[string](*outputState))
-)
-
 // Settings for this output plugin instance.
 //
 // The workers map creates one worker per input being handled by this instance.
@@ -76,6 +59,23 @@ type outputState struct {
 	// internal-use; map of inputTag to a gcs api client worker
 	workers map[string](*ObjectWorker)
 }
+
+// gzip or none
+type CompressionType string
+
+const (
+	CompressionNone CompressionType = "none"
+	CompressionGzip CompressionType = "gzip"
+)
+
+const (
+	FB_OUTPUT_NAME = "gcs"
+)
+
+var (
+	VERSION   string                    // to set this, build with --ldflags="-X main.VERSION=vx.y.z"
+	instances map[string](*outputState) = make(map[string](*outputState))
+)
 
 // global access to the fluent-bit API through this object
 var flbAPI IFLBOutputAPI = &flbOutputAPIWrapper{}
@@ -274,6 +274,11 @@ func FLBPluginExit() int {
 		}
 	}
 	return output.FLB_OK
+}
+
+// utility function for converting byte arrays
+func goBytesToCBytes(data []byte) unsafe.Pointer {
+	return unsafe.Pointer(C.CBytes(data))
 }
 
 func main() {} //notest
