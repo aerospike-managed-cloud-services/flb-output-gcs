@@ -9,10 +9,12 @@ TARBALL := flb-output-gcs-$(VERSION)_$(GOOS)_$(GOARCH).tar.gz
 BATS    := $(shell npm bin)/bats
 FB_BIN  := $(shell which fluent-bit)
 FB_OUTPUT_NAME := gcs
+# increase this number as coverage improves
+COVERAGE_PCT := 88
 
 -include .env
 
-.PHONY: clean deps-test print-release-artifact tarball test test-simple
+.PHONY: clean deps-test print-release-artifact tarball test test-simple test-88pct
 
 all: $(TARGET)
 
@@ -41,10 +43,15 @@ deps-test:
 	go get -d github.com/dave/courtney
 	go install github.com/dave/courtney
 
-test:
+test: deps-test
 	courtney .
 	go tool cover -func coverage.out
+
+test-html-coverage: deps-test
+	courtney .
 	go tool cover -html coverage.out -o coverage.html
 
-## test-100pct: deps-test
-## 	courtney -e .
+# check that coverage is at least XX%
+test-coverage-enforced: test
+	pct=`go tool cover -func coverage.out | grep '^total:' | grep -Po '\d+(?=\.)'`; \
+	[[ $$pct -ge $(COVERAGE_PCT) ]] || false
