@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 //
@@ -27,12 +29,11 @@ func newWork1() *ObjectWorker {
 func newWork2() *ObjectWorker {
 	return NewObjectWorker("mermermy",
 		"woopsie.example.com",
-		"{{.IsoDateTime}}",
+		"{{.IsoDateTime}}-{{.Uuid}}",
 		12345,
 		1234,
 		CompressionNone,
 	)
-
 }
 
 // no actual state is held here, so we'll just make one of these globally
@@ -50,6 +51,7 @@ func Test_objectNameData_String(t *testing.T) {
 		Mm:          "02",
 		Timestamp:   time.Now().Unix(),
 		Yyyy:        "2022",
+		Uuid:        uuid.New(),
 	}
 
 	type args struct {
@@ -62,14 +64,15 @@ func Test_objectNameData_String(t *testing.T) {
 	}{
 		{name: "format #1",
 			args: args{&ond},
-			want: `&main.objectNameData{InputTag:"hello", BeginTime:time.Date\(\d{4}, time.[a-zA-Z]+, \d+, \d+, \d+, \d+, \d+, time.Local\), Dd:\"17\", IsoDateTime:\"20220217T001600Z\", Mm:\"02\", Timestamp:\d+, Yyyy:\"2022\"`,
-		},
+			want: `&main.objectNameData{InputTag:"hello", BeginTime:time.Date\(\d{4}, time.[a-zA-Z]+, \d+, \d+, \d+, \d+, \d+, time.Local\), Dd:\"17\", IsoDateTime:\"20220217T001600Z\", Mm:\"02\", Timestamp:\d+, Yyyy:\"2022\", Uuid:uuid.UUID{0x.*?}}`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.args.ond.String()
 			rx := regexp.MustCompile(tt.want)
 			if rx.FindStringIndex(got) == nil {
+				byt, _ := ond.Uuid.MarshalBinary()
+				t.Errorf("%#v", byt)
 				t.Errorf("wanted: `%s` got: `%s`", tt.want, got)
 			}
 		})
@@ -89,7 +92,7 @@ func Test_formatObjectName(t *testing.T) {
 		want   string
 	}{
 		{name: "many parts", worker: work1, want: `sipiyou/\d{4}/\d\d/\d\d/\d+\.gz`},
-		{name: "iso, none compression", worker: work2, want: `\d{4}\d{4}T\d{6}Z`},
+		{name: "iso, none compression", worker: work2, want: `\d{4}\d{4}T\d{6}Z-[-\da-f]{36}`},
 	}
 
 	for _, tt := range tests {

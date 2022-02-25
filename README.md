@@ -44,7 +44,7 @@ Plugin Options         |     |     |
 *BufferTimeoutSeconds* | Maximum time (in s) between writes before the requst Writer must commit to the bucket (even if bufferSizeKiB has not been reached) | default 300
 *Compression*          | Compression type, allowed values: `none`; `gzip` | default `none`
 *OutputID*             | String to uniquely identify this output plugin instance | required, no default
-*ObjectNameTemplate*   | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}`
+*ObjectNameTemplate*   | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}-{{.Uuid}}`
 
 ### ObjectNameTemplate syntax
 
@@ -57,6 +57,7 @@ The following placeholders are recognized:
 - `{{ .IsoDateTime }}` 14-digit YYYYmmddTHHMMSSZ datetime format, UTC (ex.: `20220211T171643Z`)
 - `{{ .Yyyy }}` year, `{{ .Mm }}` month, `{{ .Dd }}` day of month
 - `{{ .BeginTime.Format "2006...." }}` .BeginTime is a [time.Time()] object and you can use any method on it; for example, you can call the `.Format` method, as shown, and get any format you want. [Go time Format reference]
+- `{{ .Uuid }}` a random UUID
 
 [text/template]: https://pkg.go.dev/text/template
 [time.Time()]: https://pkg.go.dev/time#Time

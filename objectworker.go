@@ -8,6 +8,8 @@ import (
 	"io"
 	"text/template"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // manages the lifetime of a gcs object
@@ -37,6 +39,7 @@ type objectNameData struct {
 	Mm          string
 	Timestamp   int64
 	Yyyy        string
+	Uuid        uuid.UUID
 }
 
 // raw struct representation for use in Stringer contexts
@@ -83,6 +86,7 @@ func (work *ObjectWorker) formatObjectName() string {
 		Yyyy:        fmt.Sprintf("%d", work.last.Year()),
 		Mm:          fmt.Sprintf("%02d", work.last.Month()),
 		Dd:          fmt.Sprintf("%02d", work.last.Day()),
+		Uuid:        uuid.New(),
 	}
 	if err := tpl.Execute(buf, data); err != nil { //notest
 		logger.Panic().Str("template", work.objectTemplate).Stringer("data", &data).Msgf("Template '%s' could not produce a template filename with %#v", work.objectTemplate, data)

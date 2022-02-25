@@ -5,6 +5,7 @@ go 1.17
 require (
 	cloud.google.com/go/storage v1.19.0
 	github.com/fluent/fluent-bit-go v0.0.0-20211213025035-0be1ffb0c49b
+	github.com/google/uuid v1.3.0
 	github.com/rs/zerolog v1.26.1
 )
 

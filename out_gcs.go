@@ -50,10 +50,11 @@ type outputState struct {
 	// {{ .Timestamp }} timestamp using unix seconds since 1970-01-01
 	// {{ .IsoDateTime }} 14-digit YYYYmmddTHHMMSSZ datetime format, UTC
 	// {{ .Yyyy }} {{ .Mm }} {{ .Dd }} year, month, day
+	// {{ .Uuid }} a random UUID
 	// {{ .BeginTime.Format "2006...." }} .beginTime is a time.Time() object and you can use any method on it;
 	// 								      for example, you can call .Format() as shown and get any format you want
 	// The object created will be in gs://BUCKET/
-	// default "{{ .InputTag }}-{{ .Timestamp }}
+	// default "{{ .InputTag }}-{{ .Timestamp }}-{{ .Uuid }}"
 	objectNameTemplate string
 
 	// internal-use; map of inputTag to a gcs api client worker
