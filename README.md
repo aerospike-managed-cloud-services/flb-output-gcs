@@ -114,7 +114,7 @@ To cut a release of this software, automated tests must pass. Check under `Actio
   git push --tags
   ```
 
-- Navigate to the [Github Actions URL] for this repo, and run the action labeled `... release`.
+- Navigate to the [Github Actions URL] for this repo, and run the action labeled `publish release`.
 
     - You will be asked to choose a branch. Choose your rc branch, e.g. `v1.2.3-rc`
 
@@ -139,6 +139,17 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
+### [0.1.990]
+
+#### Added
+
+- Robust unit test coverage and automated CI
+- Uuid template for object name
+
+#### Changed
+
+- Calls to fluent-bit API and GCS API are now made through interfaces to make them testable
+- Switch to structured logging
 
 ### [0.1.0]
 
@@ -153,8 +164,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.990..HEAD
 
+[0.1.990]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.1.990
 [0.1.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.0..v0.1.0
 [0.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/tree/v0.0
 
