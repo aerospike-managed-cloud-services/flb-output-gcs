@@ -40,5 +40,5 @@ jobs:
           link=$(tools/release \
             "${{ steps.check_release_conditions.outputs.release_version }}" \
             "${{ secrets.GITHUB_TOKEN }}" \
-            "${{ steps.package_release.outputs.release_artifact }}")
+            "${{ steps.check_release_conditions.outputs.release_artifact }}")
           echo "::notice::Release link: $link"
