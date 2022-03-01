@@ -29,10 +29,7 @@ type ObjectWorker struct {
 
 // template input data for constructing the object path
 type objectNameData struct {
-	// env string - customerEnvironment
-	InputTag string
-	// instanceName string - hostname of the log source
-	// instanceId string - cloud provider internal id of the host that produced the log
+	InputTag    string
 	BeginTime   time.Time
 	Dd          string
 	IsoDateTime string
