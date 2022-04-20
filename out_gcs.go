@@ -253,6 +253,7 @@ func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, ta
 		}
 		marshalled, _ := json.Marshal(go_rec)
 		buf.Write(marshalled)
+		buf.WriteString("\n")
 	}
 
 	if err := work.Put(state.gcsClient, *buf); err != nil {

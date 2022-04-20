@@ -210,9 +210,9 @@ func Test_flbPluginFlushCtxGo(t *testing.T) {
 	wri := state.workers["my-tag"].Writer.(*storageWriterForTest)
 	got := wri.buf.String()
 
-	want := `my-tag: \[\d{10}\.\d{6}, {"`
+	want := `my-tag: \[\d{10}\.\d{1,6},\{"`
 	rx := regexp.MustCompile(want)
 	if matches := rx.FindAllString(got, -1); len(matches) != 2 {
-		t.Errorf("wanted: `%s` (x2)  got: %#v", want, matches)
+		t.Errorf("wanted: `%s` (x2)  got: %#v", want, got)
 	}
 }
