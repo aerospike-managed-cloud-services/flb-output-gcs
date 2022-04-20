@@ -40,8 +40,8 @@ test-simple: $(TARGET)
 	OUT_GCS_DEV_LOGGING=yes $(FB_BIN) -e ./$(TARGET) -c test/fluent-bit.conf 2>&1
 
 deps-test:
-	go get -d github.com/dave/courtney
-	go install github.com/dave/courtney
+	# go install with an exact @version ignores go.mod
+	go install github.com/dave/courtney@v0.3.1
 
 test: deps-test
 	courtney .
