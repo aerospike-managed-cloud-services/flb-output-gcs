@@ -139,7 +139,7 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
-### [0.1.990]
+### [0.1.991]
 
 #### Added
 
@@ -164,9 +164,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.990..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.991..HEAD
 
-[0.1.990]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.1.990
+[0.1.991]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.1.991
 [0.1.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.0..v0.1.0
 [0.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/tree/v0.0
 
