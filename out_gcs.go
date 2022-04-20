@@ -4,6 +4,7 @@ import (
 	"C"
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -203,6 +204,12 @@ func FLBPluginFlushCtx(plugin, data unsafe.Pointer, length C.int, tag *C.char) i
 	return flbPluginFlushCtxGo(&state, data, int(length), C.GoString(tag))
 }
 
+// logs are emitted as 2-arrays of [timestamp, fields{}]
+type logRec []interface{}
+
+// fields in a log record have string keys and values are mostly strings but may be something else
+type logFields map[string]interface{}
+
 // higher-level flush implementation accepting parameters which are mostly gotypes instead of Ctypes
 func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, tagName string) int {
 	work, exists := state.workers[tagName]
@@ -228,14 +235,24 @@ func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, ta
 		if rc != 0 {
 			break
 		}
-		timestamp := (ts.(output.FLBTime)).UnixMicro()
-		buf.WriteString(
-			fmt.Sprintf("%s: [%d.%d, {", tagName, timestamp/1e6, timestamp%1e6),
-		)
+		buf.WriteString(fmt.Sprintf("%s: ", tagName))
+
+		timestamp := float64((ts.(output.FLBTime)).UnixMicro())
+		fields := logFields{}
+		go_rec := logRec{timestamp / 1e6, fields}
+
 		for key, val := range rec {
-			buf.WriteString(fmt.Sprintf(`"%s": %v, `, key, val))
+			key := key.(string)
+
+			switch val := val.(type) {
+			case []byte:
+				fields[key] = string(val)
+			default:
+				fields[key] = val
+			}
 		}
-		buf.WriteString("}]\n")
+		marshalled, _ := json.Marshal(go_rec)
+		buf.Write(marshalled)
 	}
 
 	if err := work.Put(state.gcsClient, *buf); err != nil {
