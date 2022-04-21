@@ -139,17 +139,22 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
-### [0.1.991]
+### [0.2.0]
 
 #### Added
 
 - Robust unit test coverage and automated CI
 - Uuid template for object name
 
+#### Fixed
+
+- Byte arrays read from fluent-bit are interpreted as utf-8 strings and logged as strings
+
 #### Changed
 
 - Calls to fluent-bit API and GCS API are now made through interfaces to make them testable
 - Switch to structured logging
+- Use JSON marshalling to produce the file
 
 ### [0.1.0]
 
@@ -164,9 +169,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.991..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.0..HEAD
 
-[0.1.991]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.1.991
+[0.2.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.2.0
 [0.1.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.0..v0.1.0
 [0.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/tree/v0.0
 
