@@ -15,7 +15,7 @@ Fluent-bit output plugin to write to GCS buckets
 1. Copy `./out_gcs.so` somewhere. You will use its location in the plugin config (see below).
 
 
-### For contibutors: Install and run tests
+### For contributors: Install and run tests
 
 1. Install Go
 1. Check out the source code with `git clone` from the [repo](https://github.com/aerospike-managed-cloud-services/flb-output-gcs/)
