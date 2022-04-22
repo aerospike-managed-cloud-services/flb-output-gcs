@@ -1,6 +1,6 @@
 #!/usr/bin/env make
 
-SHELL 	:= /usr/bin/bash
+SHELL 	:= /usr/bin/env bash
 TARGET  := out_gcs.so
 VERSION := $(shell tools/describe-version)
 GOOS 	:= $(shell go env GOOS)
