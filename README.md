@@ -14,6 +14,18 @@ Fluent-bit output plugin to write to GCS buckets
 
 1. Copy `./out_gcs.so` somewhere. You will use its location in the plugin config (see below).
 
+
+### For contributors: Install and run tests
+
+1. [Install Go](https://go.dev/doc/install)
+1. Check out the source code with `git clone` from the [repo](https://github.com/aerospike-managed-cloud-services/flb-output-gcs/)
+1. Install the dependencies and run tests:
+
+  ```
+  go install
+  make test
+  ```
+
 ### Enable the plugin and configure
 
 Ref [Fluent-bit configuration](https://docs.fluentbit.io/manual/administration/configuring-fluent-bit/configuration-file)
@@ -37,14 +49,14 @@ Then, create one or more `[OUTPUT]` sections in the top-level config file with `
     Compression gzip
 ```
 
-Plugin Options |   |   |
---- | --- | ---
-*Bucket* | Name of the bucket where we'll store logs | required, no default
-*BufferSizeKiB* | Maximum size (in KiB) held in the request Writer buffer before committing an object to the bucket | default 5000
+Plugin Options         |     |     |
+---------------------- | --- | --- |
+*Bucket*               | Name of the bucket where we'll store logs | required, no default
+*BufferSizeKiB*        | Maximum size (in KiB) held in the request Writer buffer before committing an object to the bucket | default 5000
 *BufferTimeoutSeconds* | Maximum time (in s) between writes before the requst Writer must commit to the bucket (even if bufferSizeKiB has not been reached) | default 300
-*Compression* | Compression type, allowed values: `none`; `gzip` | default `none`
-*OutputID* | String to uniquely identify this output plugin instance | required, no default
-*ObjectNameTemplate* | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}`
+*Compression*          | Compression type, allowed values: `none`; `gzip` | default `none`
+*OutputID*             | String to uniquely identify this output plugin instance | required, no default
+*ObjectNameTemplate*   | Template for the object filename that gets created in the bucket. (see below) | default `{{.InputTag}}-{{.Timestamp}}-{{.Uuid}}`
 
 ### ObjectNameTemplate syntax
 
@@ -57,6 +69,7 @@ The following placeholders are recognized:
 - `{{ .IsoDateTime }}` 14-digit YYYYmmddTHHMMSSZ datetime format, UTC (ex.: `20220211T171643Z`)
 - `{{ .Yyyy }}` year, `{{ .Mm }}` month, `{{ .Dd }}` day of month
 - `{{ .BeginTime.Format "2006...." }}` .BeginTime is a [time.Time()] object and you can use any method on it; for example, you can call the `.Format` method, as shown, and get any format you want. [Go time Format reference]
+- `{{ .Uuid }}` a random UUID
 
 [text/template]: https://pkg.go.dev/text/template
 [time.Time()]: https://pkg.go.dev/time#Time
@@ -113,7 +126,7 @@ To cut a release of this software, automated tests must pass. Check under `Actio
   git push --tags
   ```
 
-- Navigate to the [Github Actions URL] for this repo, and run the action labeled `... release`.
+- Navigate to the [Github Actions URL] for this repo, and run the action labeled `publish release`.
 
     - You will be asked to choose a branch. Choose your rc branch, e.g. `v1.2.3-rc`
 
@@ -138,6 +151,22 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
+### [0.2.0]
+
+#### Added
+
+- Robust unit test coverage and automated CI
+- Uuid template for object name
+
+#### Fixed
+
+- Byte arrays read from fluent-bit are interpreted as utf-8 strings and logged as strings
+
+#### Changed
+
+- Calls to fluent-bit API and GCS API are now made through interfaces to make them testable
+- Switch to structured logging
+- Use JSON marshalling to produce the file
 
 ### [0.1.0]
 
@@ -152,8 +181,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.0..HEAD
 
+[0.2.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.2.0
 [0.1.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.0..v0.1.0
 [0.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/tree/v0.0
 

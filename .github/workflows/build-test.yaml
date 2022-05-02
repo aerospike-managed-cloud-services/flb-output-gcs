@@ -1,10 +1,10 @@
 name: build + test
-on: [push]  # all push to any branch
+on: [push, pull_request]  # all push to any branch
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "Running in response to ${{ github.event_name }}"
+      - run: echo "::notice::Running in response to ${{ github.event_name }}"
 
       - name: Check out repository code
         uses: actions/checkout@v2
@@ -12,7 +12,9 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v2
         with:
-          go-version: 1.17
+          go-version: 1.18.1
       
       - name: Test
-        run: make test
+        run: |
+          go install .
+          make test
