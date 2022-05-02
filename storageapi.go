@@ -44,12 +44,12 @@ func (stoc *storageClient) NewWriterFromBucketObjectPath(bucket, path string, ct
 	return ret
 }
 
-// StorageAPI abstraction for test
+// IStorageAPI StorageAPI abstraction for test
 type IStorageAPI interface {
 	NewClient(ctx context.Context) (IStorageClient, error)
 }
 
-// concrete StorageAPI for production
+// storageAPIWrapper concrete StorageAPI for production
 type storageAPIWrapper struct{}
 
 func (sapi *storageAPIWrapper) NewClient(ctx context.Context) (IStorageClient, error) {

@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// manages the lifetime of a gcs object
+// ObjectWorker manages the lifetime of a gcs object
 type ObjectWorker struct {
 	bucketName         string
 	bytesMax           int64
@@ -27,7 +27,7 @@ type ObjectWorker struct {
 	Written            int64
 }
 
-// template input data for constructing the object path
+// objectNameData template input data for constructing the object path
 type objectNameData struct {
 	InputTag    string
 	BeginTime   time.Time
@@ -39,12 +39,12 @@ type objectNameData struct {
 	Uuid        uuid.UUID
 }
 
-// raw struct representation for use in Stringer contexts
+// String raw struct representation for use in Stringer contexts
 func (ond *objectNameData) String() string {
 	return fmt.Sprintf("%#v", ond)
 }
 
-// constructor
+// NewObjectWorker constructor
 func NewObjectWorker(tag, bucketName, objectTemplate string, sizeKiB int64, timeoutSeconds int, compression CompressionType) *ObjectWorker {
 	return &ObjectWorker{
 		bucketName:         bucketName,
@@ -67,7 +67,7 @@ func (work *ObjectWorker) FormatBucketPath() string {
 	return "[closed]"
 }
 
-// set the Worker objectPath by applying the template to the current time and input tag
+// formatObjectName set the Worker objectPath by applying the template to the current time and input tag
 // we also append ".gz" if the file is gzip-compressed
 func (work *ObjectWorker) formatObjectName() string {
 	tpl, err := template.New("objectPath").Parse(work.objectTemplate)
@@ -96,7 +96,7 @@ func (work *ObjectWorker) formatObjectName() string {
 	return buf.String()
 }
 
-// initialize a writer to write data to a new bucket object
+// beginStreaming initialize a writer to write data to a new bucket object
 func (work *ObjectWorker) beginStreaming(client IStorageClient) {
 	ctx := context.Background()
 
@@ -111,7 +111,7 @@ func (work *ObjectWorker) beginStreaming(client IStorageClient) {
 	work.startTimer()
 }
 
-// start the idle timer for this worker's write operation
+// startTimer start the idle timer for this worker's write operation
 func (work *ObjectWorker) startTimer() {
 	expiration := time.Duration(work.bufferTimeoutMicro) * time.Microsecond
 
@@ -122,7 +122,7 @@ func (work *ObjectWorker) startTimer() {
 	})
 }
 
-// write bytes to a worker
+// Put write bytes to a worker
 func (work *ObjectWorker) Put(client IStorageClient, buf bytes.Buffer) error {
 	if work.Writer == nil {
 		work.beginStreaming(client)
@@ -152,7 +152,7 @@ func (work *ObjectWorker) Put(client IStorageClient, buf bytes.Buffer) error {
 	return nil
 }
 
-// commit an object being streamed to GCS proper
+// Commit commit an object being streamed to GCS proper
 func (work *ObjectWorker) Commit() error {
 	if err := work.Writer.Close(); err != nil {
 		return err

@@ -41,7 +41,7 @@ var sapi = &storageAPIForTest{}
 
 ////////////
 
-// do we pretty-print an objectNameData{}?
+// Test_objectNameData_String do we pretty-print an objectNameData{}?
 func Test_objectNameData_String(t *testing.T) {
 	ond := objectNameData{
 		InputTag:    "hello",
@@ -79,7 +79,7 @@ func Test_objectNameData_String(t *testing.T) {
 	}
 }
 
-// do we create a formatted path out of our objectNameData{} and template?
+// Test_formatObjectName do we create a formatted path out of our objectNameData{} and template?
 // do we attach the .gz extension when appropriate?
 func Test_formatObjectName(t *testing.T) {
 	work1 := newWork1()
@@ -106,7 +106,7 @@ func Test_formatObjectName(t *testing.T) {
 	}
 }
 
-// do we create a full gs:// url out of our worker, template, and compression flag?
+// Test_FormatBucketPath do we create a full gs:// url out of our worker, template, and compression flag?
 // do we present a closed path when the worker is not in a writeable state?
 func Test_FormatBucketPath(t *testing.T) {
 	work1 := newWork1()
@@ -132,7 +132,7 @@ func Test_FormatBucketPath(t *testing.T) {
 	}
 }
 
-// do we set up and tear down the bucket writing objects when asked to begin streaming?
+// Test_beginStreaming do we set up and tear down the bucket writing objects when asked to begin streaming?
 func Test_beginStreaming(t *testing.T) {
 	begin := time.Now()
 	ctx := context.Background()
@@ -178,7 +178,7 @@ func Test_beginStreaming(t *testing.T) {
 	}
 }
 
-// ObjectWorker.Put() with a gzip stream, do we produce the write stream of bytes?
+// Test_Put_gzip ObjectWorker.Put() with a gzip stream, do we produce the write stream of bytes?
 func Test_Put_gzip(t *testing.T) {
 	ctx := context.Background()
 	cli, _ := sapi.NewClient(ctx)
@@ -218,7 +218,7 @@ func Test_Put_plain_commit(t *testing.T) {
 	}
 }
 
-// do we commit automatically when a timer expires?
+// Test_timerExpired do we commit automatically when a timer expires?
 func Test_timerExpired(t *testing.T) {
 	work2 := newWork2()
 	work2.bufferTimeoutMicro = 3

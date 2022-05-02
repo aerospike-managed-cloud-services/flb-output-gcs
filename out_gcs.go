@@ -15,7 +15,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// Settings for this output plugin instance.
+// outputState Settings for this output plugin instance.
 //
 // The workers map creates one worker per input being handled by this instance.
 // The organization of fluent-bit permits multiple output plugins routing
@@ -62,7 +62,7 @@ type outputState struct {
 	workers map[string](*ObjectWorker)
 }
 
-// gzip or none
+// CompressionType gzip or none
 type CompressionType string
 
 const (
@@ -79,13 +79,13 @@ var (
 	instances map[string](*outputState) = make(map[string](*outputState))
 )
 
-// global access to the fluent-bit API through this object
+// flbAPI global access to the fluent-bit API through this object
 var flbAPI IFLBOutputAPI = &flbOutputAPIWrapper{}
 
-// global access to the gcp storage API through this object
+// storagAPI global access to the gcp storage API through this object
 var storageAPI IStorageAPI = &storageAPIWrapper{}
 
-// structured data logger; this constructor makes it easier to replace in a test
+// logger structured data logger; this constructor makes it easier to replace in a test
 var logger zerolog.Logger = log.Logger.With().Str("output", FB_OUTPUT_NAME).Logger()
 
 //export FLBPluginRegister
@@ -94,7 +94,7 @@ func FLBPluginRegister(def unsafe.Pointer) int {
 	return flbAPI.FLBPluginRegister(def, FB_OUTPUT_NAME, description)
 }
 
-// convert a plugin config string to int or return (, false) to accept the default
+// pluginConfigValutToInt convert a plugin config string to int or return (, false) to accept the default
 func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 	sval := flbAPI.FLBPluginConfigKey(plugin, skey)
 
@@ -112,7 +112,7 @@ func pluginConfigValueToInt(plugin unsafe.Pointer, skey string) (int64, bool) {
 	}
 }
 
-// get a string value from the config, enforcing that it is set
+// getConfigStrRequired get a string value from the config, enforcing that it is set
 func getConfigStrRequired(plugin unsafe.Pointer, skey string) string {
 	var val string
 	if val = flbAPI.FLBPluginConfigKey(plugin, skey); val == "" {
@@ -122,7 +122,7 @@ func getConfigStrRequired(plugin unsafe.Pointer, skey string) string {
 	return val
 }
 
-// get a string value from the config, substituting the default if blank
+// getConfigStrDefault get a string value from the config, substituting the default if blank
 func getConfigStrDefault(plugin unsafe.Pointer, skey, dfl string) string {
 	var val string
 	if val = flbAPI.FLBPluginConfigKey(plugin, skey); val == "" {
@@ -210,7 +210,7 @@ type logRec []interface{}
 // fields in a log record have string keys and values are mostly strings but may be something else
 type logFields map[string]interface{}
 
-// higher-level flush implementation accepting parameters which are mostly gotypes instead of Ctypes
+// flbPluginFlushCtxGo higher-level flush implementation accepting parameters which are mostly gotypes instead of Ctypes
 func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, tagName string) int {
 	work, exists := state.workers[tagName]
 	if !exists {
@@ -265,18 +265,19 @@ func flbPluginFlushCtxGo(state *outputState, data unsafe.Pointer, length int, ta
 	return output.FLB_OK
 }
 
-// DO NOT USE.
+// DO NOT USE FLBPluginExitCtx
 //
-// FLBPluginExitCtx is called once per output instance but is ONLY passed the context
-// for the first instance (potentially multiple times, same argument).
-//
-// This appears to be a bug in FLBPluginExitCtx
+// BUG(corydodt): FLBPluginExitCtx is called once per output instance but is
+// ONLY passed the context for the first instance (potentially multiple times,
+// same argument). This appears to be a bug in the upstream caller of FLBPluginExitCtx
 // https://github.com/fluent/fluent-bit-go/issues/49
 //
 // func FLBPluginExitCtx(ctx unsafe.Pointer) int {
 // 	return output.FLB_OK
 // }
 
+// FLBPluginExit visit every worker and call Close to commit the open objects.
+//
 // At exit, due to the bug above, we visit every worker we have initialized and
 // call Close to make sure the objects get committed. The nil check is the only
 // way we can be sure not to close one twice
@@ -295,7 +296,7 @@ func FLBPluginExit() int {
 	return output.FLB_OK
 }
 
-// utility function for converting byte arrays
+// goBytesToCBytes utility function for converting byte arrays
 func goBytesToCBytes(data []byte) unsafe.Pointer {
 	return unsafe.Pointer(C.CBytes(data))
 }

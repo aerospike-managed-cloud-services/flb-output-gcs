@@ -10,7 +10,7 @@ import (
 
 type opcConfig map[string]string
 
-// do we capture and correctly set name and desc during reg
+// Test_FLBPluginRegister do we capture and correctly set name and desc during reg
 func Test_FLBPluginRegister(t *testing.T) {
 	plugin := unsafe.Pointer(&outputPluginForTest{})
 	flbAPI = &flbOutputAPIForTest{config: opcConfig{}}
@@ -28,7 +28,8 @@ func Test_FLBPluginRegister(t *testing.T) {
 	}
 }
 
-// do we correctly convert (or fallback to default) for number, blank, and not-number
+// Test_pluginConfigValueToInt do we correctly convert (or fallback to default)
+// for number, blank, and not-number
 func Test_pluginConfigValueToInt(t *testing.T) {
 	plugin := unsafe.Pointer(&outputPluginForTest{})
 	config_has_key := flbOutputAPIForTest{config: opcConfig{"some_key": "19"}}
@@ -77,8 +78,9 @@ func Test_pluginConfigValueToInt(t *testing.T) {
 	}
 }
 
-// do we convert the text config into a working configured outputState;
-// can we also do that twice, and then clean up and shut down both?
+// Test_FLBPluginInit_Exit do we convert the text config into a working
+// configured outputState; can we also do that twice, and then clean up and shut
+// down both?
 func Test_FLBPluginInit_Exit(t *testing.T) {
 	// swap production storageAPI with a stub to prevent actual access
 	// to gcp during this test
@@ -183,7 +185,7 @@ func Test_FLBPluginInit_Exit(t *testing.T) {
 // We'll use this to test a flush
 var memRecordForTest = []byte{146, 215, 0, 98, 22, 229, 124, 13, 208, 71, 170, 134, 169, 77, 101, 109, 46, 116, 111, 116, 97, 108, 206, 0, 93, 1, 128, 168, 77, 101, 109, 46, 117, 115, 101, 100, 206, 0, 78, 48, 176, 168, 77, 101, 109, 46, 102, 114, 101, 101, 206, 0, 14, 208, 208, 170, 83, 119, 97, 112, 46, 116, 111, 116, 97, 108, 206, 0, 63, 255, 252, 169, 83, 119, 97, 112, 46, 117, 115, 101, 100, 205, 44, 0, 169, 83, 119, 97, 112, 46, 102, 114, 101, 101, 206, 0, 63, 211, 252, 146, 215, 0, 98, 22, 229, 125, 13, 125, 252, 206, 134, 169, 77, 101, 109, 46, 116, 111, 116, 97, 108, 206, 0, 93, 1, 128, 168, 77, 101, 109, 46, 117, 115, 101, 100, 206, 0, 78, 48, 200, 168, 77, 101, 109, 46, 102, 114, 101, 101, 206, 0, 14, 208, 184, 170, 83, 119, 97, 112, 46, 116, 111, 116, 97, 108, 206, 0, 63, 255, 252, 169, 83, 119, 97, 112, 46, 117, 115, 101, 100, 205, 44, 0, 169, 83, 119, 97, 112, 46, 102, 114, 101, 101, 206, 0, 63, 211, 252}
 
-// do we write records to our fake output buffer when flushed?
+// Test_flbPluginFlushCtxGo do we write records to our fake output buffer when flushed?
 func Test_flbPluginFlushCtxGo(t *testing.T) {
 	// swap production storageAPI with a stub to prevent actual access
 	// to gcp during this test.
