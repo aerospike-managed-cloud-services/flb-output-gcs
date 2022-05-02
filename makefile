@@ -1,25 +1,23 @@
 #!/usr/bin/env make
 
-SHELL 	:= /usr/bin/env bash
-TARGET  := out_gcs.so
-VERSION := $(shell tools/describe-version)
-GOOS 	:= $(shell go env GOOS)
-GOARCH 	:= $(shell go env GOARCH)
-TARBALL := flb-output-gcs-$(VERSION)_$(GOOS)_$(GOARCH).tar.gz
-BATS    := $(shell npm bin)/bats
-FB_BIN  := $(shell which fluent-bit)
-FB_OUTPUT_NAME := gcs
+SHELL 			:= /usr/bin/env bash
+TARGET  		:= out_gcs.so
+TAGGED_VERSION	:= $(shell tools/describe-version)
+GOOS 			:= $(shell go env GOOS)
+GOARCH 			:= $(shell go env GOARCH)
+TARBALL 		:= flb-output-gcs-$(VERSION)_$(GOOS)_$(GOARCH).tar.gz
+SOURCES			:= *.go go.mod go.sum
+RELEASE_ARTIFACTS	:= $(TARBALL)
+FB_BIN  		:= $(shell which fluent-bit)
 # increase this number as coverage improves
-COVERAGE_PCT := 88
+COVERAGE_PCT	:= 88
 
 -include .env
 
-.PHONY: clean deps-test print-release-artifact tarball test test-simple test-88pct
+.PHONY: clean deps-test print-release-artifact tarball test test-simple
 
-all: $(TARGET)
-
-$(TARGET): *.go go.mod go.sum
-	go build -buildmode=c-shared -o $@ --ldflags="-X main.VERSION=$(VERSION)"
+$(TARGET): $(SOURCES)
+	go build -buildmode=c-shared -o $@ --ldflags="-X main.VERSION=$(TAGGED_VERSION)"
 
 $(TARBALL): $(TARGET)
 	tar cfz $@ $^ && tar tvfz $@
@@ -28,13 +26,10 @@ tarball:
 	$(MAKE) $(TARBALL)
 
 print-release-artifact:
-	@echo "$(TARBALL)"
+	@echo $(RELEASE_ARTIFACTS)
 
 clean:
 	rm -f $(TARGET) $(TARBALL)
-
-## test-bats: $(TARGET)
-## 	cd test; $(BATS) test.bats
 
 test-simple: $(TARGET)
 	OUT_GCS_DEV_LOGGING=yes $(FB_BIN) -e ./$(TARGET) -c test/fluent-bit.conf 2>&1
