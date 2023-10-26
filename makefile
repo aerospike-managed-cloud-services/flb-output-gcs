@@ -3,9 +3,11 @@
 SHELL 			:= /usr/bin/env bash
 TARGET  		:= out_gcs.so
 TAGGED_VERSION	:= $(shell tools/describe-version)
-GOOS 			:= $(shell go env GOOS)
-GOARCH 			:= $(shell go env GOARCH)
-TARBALL 		:= flb-output-gcs-$(VERSION)_$(GOOS)_$(GOARCH).tar.gz
+#GOOS 			:= $(shell go env GOOS)
+GOOS 			:= linux
+#GOARCH 			:= $(shell go env GOARCH)
+GOARCH 			:= amd64
+TARBALL 		:= flb-output-gcs-$(TARGET_VERSION)_$(GOOS)_$(GOARCH).tar.gz
 SOURCES			:= *.go go.mod go.sum
 RELEASE_ARTIFACTS	:= $(TARBALL)
 FB_BIN  		:= $(shell which fluent-bit)
