@@ -103,11 +103,10 @@ To cut a release of this software, automated tests must pass. Check under `Actio
 #### Create an RC branch and test
 
 - We use the Gitflow process. For a release, this means that you should have a v1.2.3-rc branch under your 
-  develop branch. Like this:
+  main branch. Like this:
   ```
     main  
-    └── develop  
-        └── v1.2.3-rc
+    └── v1.2.3-rc
   ```
 
 - Update *this file* (README.md).
@@ -138,10 +137,7 @@ To cut a release of this software, automated tests must pass. Check under `Actio
 
 #### Merge up
 
-- Finish up by merging your `-rc` branch into 
-  1. `main` and then 
-  2. `develop`.
-
+- Finish up by merging your `-rc` branch into `main`.
 
 ## Changelog
 
