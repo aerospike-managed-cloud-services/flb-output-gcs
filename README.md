@@ -151,6 +151,10 @@ The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
 
+### [0.2.3]
+
+- Fix tarball versioning in makefile
+
 ### [0.2.2]
 
 - Fix for http2/rapid-reset CVE-2023-44487
@@ -189,8 +193,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.2..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.3..HEAD
 
+[0.2.3]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.2..v0.2.3
 [0.2.2]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.1..v0.2.2
 [0.2.1]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.0..v0.2.1
 [0.2.0]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.1.0..v0.2.0
