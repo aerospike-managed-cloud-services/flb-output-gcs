@@ -146,6 +146,7 @@ To cut a release of this software, automated tests must pass. Check under `Actio
 The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
+
 ### [0.2.4]
 
 - Fix for http2 CVE-2023-45288
@@ -192,8 +193,9 @@ Versioning].
 - Brand-new repo.
 
 
-[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.3..HEAD
+[Unreleased]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.4..HEAD
 
+[0.2.4]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.3..v0.2.4
 [0.2.3]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.2..v0.2.3
 [0.2.2]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.1..v0.2.2
 [0.2.1]: https://github.com/aerospike-managed-cloud-services/flb-output-gcs/compare/v0.2.0..v0.2.1
