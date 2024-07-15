@@ -146,6 +146,9 @@ To cut a release of this software, automated tests must pass. Check under `Actio
 The format is based on [Keep a Changelog], and this project adheres to [Semantic
 Versioning].
 </details>
+### [0.2.4]
+
+- Fix for http2 CVE-2023-45288
 
 ### [0.2.3]
 

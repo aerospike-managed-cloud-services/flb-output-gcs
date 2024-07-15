@@ -36,7 +36,8 @@ test-simple: $(TARGET)
 
 deps-test:
 	# go install with an exact @version ignores go.mod
-	go install github.com/dave/courtney@v0.3.1
+	#go install github.com/dave/courtney@v0.3.1
+	go install github.com/dave/courtney
 
 test: deps-test
 	courtney .
